@@ -210,6 +210,10 @@ public class AbstractConfig {
      * Get a list of configured instances of the given class specified by the given configuration key. The configuration
      * may specify either null or an empty string to indicate no configured instances. In both cases, this method
      * returns an empty list to indicate no configured instances.
+     *
+     * 从配置的key中获取配置的实例列表。配置可以指定null或者空字符串来表明没有配置的实例，同样，这个方法
+     * 会返回空列表来表示这是一个没有配置过的实例。
+     *
      * @param key The configuration key for the class
      * @param t The interface the class should implement
      * @return The list of configured instances

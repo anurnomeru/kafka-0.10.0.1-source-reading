@@ -78,7 +78,7 @@ import org.slf4j.LoggerFactory;
  * 这是一个使用producer来发送【包含序号的键值对的字符串】的消息的示例。
  * <pre>
  * {@code
- * 
+ *
  * Properties props = new Properties();
  * props.put("bootstrap.servers", "localhost:9092");
  * props.put("acks", "all");
@@ -100,19 +100,34 @@ import org.slf4j.LoggerFactory;
  * as well as a background I/O thread that is responsible for turning these records into requests and transmitting them
  * to the cluster. Failure to close the producer after use will leak these resources.
  * <p>
+ * 生产者是一个持有消息的缓冲空间池，这个消息还没有发送到kafka server，它是一个负责将这些消息扔进请求，
+ * 并且发送到集群的，后台的，I/O线程。如果在使用producer之后没有成功关闭它，将可能导致资源的泄露。
+ * <p>
  * The {@link #send(ProducerRecord) send()} method is asynchronous. When called it adds the record to a buffer of pending record sends
  * and immediately returns. This allows the producer to batch together individual records for efficiency.
  * <p>
+ * 发送方法是一个异步的方法，当你调用它，将会把消息添加到缓冲，然后等待将消息发送出去，之后立即返回。
+ * producer将会批量的将各自的消息放在一起以提高效率。
+ * <p>
  * The <code>acks</code> config controls the criteria under which requests are considered complete. The "all" setting
  * we have specified will result in blocking on the full commit of the record, the slowest but most durable setting.
+ * <p>
+ * acks 配置，会控制【请求已经被认为发送完毕】的条件，我们指定为"all"配置的话，会导致消息提交阻塞，但这也是
+ * 最慢且最耐用的配置。
  * <p>
  * If the request fails, the producer can automatically retry, though since we have specified <code>retries</code>
  * as 0 it won't. Enabling retries also opens up the possibility of duplicates (see the documentation on
  * <a href="http://kafka.apache.org/documentation.html#semantics">message delivery semantics</a> for details).
  * <p>
+ * 如果请求失败了，producer将会自动进行重试，直到我们配置的重试次数到0，它就会停下。开启重试同样可能
+ * 导致一个问题：消息重复。
+ * <p>
  * The producer maintains buffers of unsent records for each partition. These buffers are of a size specified by
  * the <code>batch.size</code> config. Making this larger can result in more batching, but requires more memory (since we will
  * generally have one of these buffers for each active partition).
+ * <p>
+ * producer 维护了每个分区未发送消息的缓冲。这些缓冲的大小由batch.size来指定。将这个值配置的更大可以
+ * 带来更大的批量操作，同时也需要更大的内存。（我们通常为每一个活跃的分区维护一个缓冲区）
  * <p>
  * By default a buffer is available to send immediately even if there is additional unused space in the buffer. However if you
  * want to reduce the number of requests you can set <code>linger.ms</code> to something greater than 0. This will
@@ -124,10 +139,21 @@ import org.slf4j.LoggerFactory;
  * batching will occur regardless of the linger configuration; however setting this to something larger than 0 can lead to fewer, more
  * efficient requests when not under maximal load at the cost of a small amount of latency.
  * <p>
+ * 默认情况下，缓冲区可以立刻发送消息，即使缓冲区中还有很多未用的空间。当然如果想减少请求次数，
+ * 你可以设置将<code>linger.ms</code>设置地比0更大。这将会通知producer在发送前进行xx（设置的那个）毫秒的等待，这样的话，
+ * 会有更多的消息在一次批量中推送出去。这个和TCP中的 Nagle 算法很像。比如说，在代码中，当我们设置了1毫秒的linger time，
+ * 会有接近100条信息会在一次请求中发送出去。但如果我们没有填满缓冲区，这个设置会导致我们的一次请求多了1毫秒的延迟。
+ * 注意，消息在相近的时间内到达producer，一般来说，在linger.ms=0的时候，也将会一起被发送出去，所以在重量级的负载批处理下，
+ * 会导致linger配置无效。不过把它设置得大于0可以为我们带来更少，更有效的请求，前提是当前不在高负载的情况下，只需要承担
+ * 一点小小的延迟、
+ * <p>
  * The <code>buffer.memory</code> controls the total amount of memory available to the producer for buffering. If records
  * are sent faster than they can be transmitted to the server then this buffer space will be exhausted. When the buffer space is
  * exhausted additional send calls will block. The threshold for time to block is determined by <code>max.block.ms</code> after which it throws
  * a TimeoutException.
+ * <p>
+ * buffer.memory 配置，控制了producer中缓冲区可用的内存大小。如果【消息的send】比【消息transmitte到server】更快，这个buffer
+ * 将会用尽，当这个缓冲区用尽，调用send方法将会阻塞。 max.block.ms 是阻塞后的阈值，超过这个将会抛出timeout异常。
  * <p>
  * The <code>key.serializer</code> and <code>value.serializer</code> instruct how to turn the key and value objects the user provides with
  * their <code>ProducerRecord</code> into bytes. You can use the included {@link org.apache.kafka.common.serialization.ByteArraySerializer} or
@@ -182,6 +208,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * are documented <a href="http://kafka.apache.org/documentation.html#producerconfigs">here</a>. Values can be
      * either strings or Objects of the appropriate type (for example a numeric configuration would accept either the
      * string "42" or the integer 42).
+     * <P>
+     * Producer通过键值对配置来创建一个实例。有效的配置在xxx可以看到。值不仅可以是String，也可以是一些其他类型，比如说
+     * "42" 和 42 是一样的。因为读取的时候都是用String去读取，然后再进行类型转换。
      *
      * @param configs The producer configs
      */
@@ -194,6 +223,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * Valid configuration strings are documented <a href="http://kafka.apache.org/documentation.html#producerconfigs">here</a>.
      * Values can be either strings or Objects of the appropriate type (for example a numeric configuration would accept
      * either the string "42" or the integer 42).
+     *
+     * Producer通过键值对来创建一个实例。有效的配置文档在xxx，
      *
      * @param configs The producer configs
      * @param keySerializer The serializer for key that implements {@link Serializer}. The configure() method won't be
@@ -238,10 +269,15 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private KafkaProducer(ProducerConfig config, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
         try {
             log.trace("Starting the Kafka producer");
+
+            // 获取配置文件
             Map<String, Object> userProvidedConfigs = config.originals();
+
+            // 赋值到本地变量
             this.producerConfig = config;
             this.time = new SystemTime();
 
+            // 获取client Id
             clientId = config.getString(ProducerConfig.CLIENT_ID_CONFIG);
             if (clientId.length() <= 0) {
                 clientId = "producer-" + PRODUCER_CLIENT_ID_SEQUENCE.getAndIncrement();
@@ -255,12 +291,17 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 MetricsReporter.class);
             reporters.add(new JmxReporter(JMX_PREFIX));
             this.metrics = new Metrics(metricConfig, reporters, time);
+
+            // 通过反射机制实例化配置的partitioner、keySerializer，valueSerializer
             this.partitioner = config.getConfiguredInstance(ProducerConfig.PARTITIONER_CLASS_CONFIG, Partitioner.class);
             long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
+
+            // 创建并更新kafka集群的元数据
             this.metadata = new Metadata(retryBackoffMs, config.getLong(ProducerConfig.METADATA_MAX_AGE_CONFIG));
             this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
             this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
             this.compressionType = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
+
             /* check for user defined settings.
              * If the BLOCK_ON_BUFFER_FULL is set to true,we do not honor METADATA_FETCH_TIMEOUT_CONFIG.
              * This should be removed with release 0.9 when the deprecated configs are removed.
