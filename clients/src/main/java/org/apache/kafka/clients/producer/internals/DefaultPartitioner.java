@@ -6,7 +6,7 @@
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -46,6 +46,11 @@ public class DefaultPartitioner implements Partitioner {
      * Note: changing this method in the future will possibly cause partition selection not to be
      * compatible with the existing messages already placed on a partition.
      *
+     * 一个简单方法来确定来将一个数字转换为正数，当输入有效，会返回原值。
+     * 当输入为负数，将返回原值与0x7fffffff（全是1）的按位与值（并不返回它的绝对值）
+     *
+     * 这个方法在以后可能会改，改了后将导致分区的选择与现存的消息分区不兼容
+     *
      * @param number a given number
      * @return a positive number.
      */
@@ -53,10 +58,18 @@ public class DefaultPartitioner implements Partitioner {
         return number & 0x7fffffff;
     }
 
-    public void configure(Map<String, ?> configs) {}
+    public static void main(String[] args) {
+          AtomicInteger counter = new AtomicInteger(-2);
+        System.out.println(counter);
+        System.out.println(toPositive(counter.incrementAndGet()));
+    }
+
+    public void configure(Map<String, ?> configs) {
+    }
 
     /**
      * Compute the partition for the given record.
+     * 为消息计算分区
      *
      * @param topic The topic name
      * @param key The key to partition on (or null if no key)
@@ -66,16 +79,18 @@ public class DefaultPartitioner implements Partitioner {
      * @param cluster The current cluster metadata
      */
     public int partition(String topic, Object key, byte[] keyBytes, Object value, byte[] valueBytes, Cluster cluster) {
-        List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);
+        List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);// 先从集群中取出所有分区
         int numPartitions = partitions.size();
-        if (keyBytes == null) {
-            int nextValue = counter.getAndIncrement();
-            List<PartitionInfo> availablePartitions = cluster.availablePartitionsForTopic(topic);
+        if (keyBytes == null) {            // 没有key的情况走这个分支
+            int nextValue = counter.getAndIncrement(); // 计数服务+1
+            List<PartitionInfo> availablePartitions = cluster.availablePartitionsForTopic(topic);// 取出可用的分区
             if (availablePartitions.size() > 0) {
                 int part = DefaultPartitioner.toPositive(nextValue) % availablePartitions.size();
-                return availablePartitions.get(part).partition();
+                return availablePartitions.get(part)
+                                          .partition();
             } else {
                 // no partitions are available, give a non-available partition
+                // 没有可用的分区，只能返回一个不可用的分区
                 return DefaultPartitioner.toPositive(nextValue) % numPartitions;
             }
         } else {
@@ -84,6 +99,6 @@ public class DefaultPartitioner implements Partitioner {
         }
     }
 
-    public void close() {}
-
+    public void close() {
+    }
 }

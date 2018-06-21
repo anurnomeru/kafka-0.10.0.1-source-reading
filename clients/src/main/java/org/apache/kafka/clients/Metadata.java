@@ -3,9 +3,9 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -26,12 +26,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- *
- *
  * A class encapsulating some of the logic around metadata.
  * <p>
+ *
+ * 这个类会被client线程（分区用partitioning）与后台sender线程共享
+ *
  * This class is shared by the client thread (for partitioning) and the background sender thread.
- * 
+ *
+ * Metadata 维持了一个可随时间增加的 topic 子集，当我们请求Metadata来获取一个不存在的topic时，
+ * 将会触发metadata的更新。
+ *
  * Metadata is maintained for only a subset of topics, which can be added to over time. When we request metadata for a
  * topic we don't have any metadata for it will trigger a metadata update.
  */
@@ -40,14 +44,26 @@ public final class Metadata {
     private static final Logger log = LoggerFactory.getLogger(Metadata.class);
 
     private final long refreshBackoffMs;
+
     private final long metadataExpireMs;
+
     private int version;
+
     private long lastRefreshMs;
+
     private long lastSuccessfulRefreshMs;
+
+    // 集群信息
     private Cluster cluster;
+
     private boolean needUpdate;
+
     private final Set<String> topics;
+
+    // 监听元数据更新的监听器合计，自定义元数据监听，需要实现Metadata.Listener.onMetadataUpdate()，在更新集群信息之前
+    // 会通知listener集合中全部的listener对象
     private final List<Listener> listeners;
+
     private boolean needMetadataForAllTopics;
 
     /**
@@ -59,8 +75,9 @@ public final class Metadata {
 
     /**
      * Create a new Metadata instance
+     *
      * @param refreshBackoffMs The minimum amount of time that must expire between metadata refreshes to avoid busy
-     *        polling
+     * polling
      * @param metadataExpireMs The maximum amount of time that metadata can be retained without refresh
      */
     public Metadata(long refreshBackoffMs, long metadataExpireMs) {
@@ -78,6 +95,7 @@ public final class Metadata {
 
     /**
      * Get the current cluster info without blocking
+     * 不阻塞地获取cluster（cluster是只读的，不存在线程安全问题）
      */
     public synchronized Cluster fetch() {
         return this.cluster;
@@ -102,6 +120,7 @@ public final class Metadata {
     }
 
     /**
+     * 获取当前version，并将metaData置为：需更新
      * Request an update of the current cluster metadata info, return the current version before the update
      */
     public synchronized int requestUpdate() {
@@ -111,6 +130,7 @@ public final class Metadata {
 
     /**
      * Check whether an update has been explicitly requested.
+     *
      * @return true if an update was requested, false otherwise
      */
     public synchronized boolean updateRequested() {
@@ -119,30 +139,39 @@ public final class Metadata {
 
     /**
      * Wait for metadata update until the current version is larger than the last version we know of
+     * 等待元数据更新，直到版本大于 last version 。
      */
     public synchronized void awaitUpdate(final int lastVersion, final long maxWaitMs) throws InterruptedException {
         if (maxWaitMs < 0) {
             throw new IllegalArgumentException("Max time to wait for metadata updates should not be < 0 milli seconds");
         }
+
+        // 记录开始时间
         long begin = System.currentTimeMillis();
         long remainingWaitMs = maxWaitMs;
+
+        // 直到目前版本大于 lastVersion
         while (this.version <= lastVersion) {
-            if (remainingWaitMs != 0)
+            if (remainingWaitMs != 0) {
                 wait(remainingWaitMs);
+            }
             long elapsed = System.currentTimeMillis() - begin;
-            if (elapsed >= maxWaitMs)
+
+            // 都超时了还没返回，说明update失败了
+            if (elapsed >= maxWaitMs) {
                 throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
+            }
             remainingWaitMs = maxWaitMs - elapsed;
         }
     }
 
     /**
      * Replace the current set of topics maintained to the one provided
-     * @param topics
      */
     public synchronized void setTopics(Collection<String> topics) {
-        if (!this.topics.containsAll(topics))
+        if (!this.topics.containsAll(topics)) {
             requestUpdate();
+        }
         this.topics.clear();
         this.topics.addAll(topics);
     }
@@ -156,7 +185,9 @@ public final class Metadata {
 
     /**
      * Check if a topic is already in the topic set.
+     *
      * @param topic topic to check
+     *
      * @return true if the topic exists, false otherwise
      */
     public synchronized boolean containsTopic(String topic) {
@@ -165,6 +196,7 @@ public final class Metadata {
 
     /**
      * Update the cluster metadata
+     * 更新集群信息
      */
     public synchronized void update(Cluster cluster, long now) {
         this.needUpdate = false;
@@ -172,10 +204,12 @@ public final class Metadata {
         this.lastSuccessfulRefreshMs = now;
         this.version += 1;
 
-        for (Listener listener: listeners)
+        for (Listener listener : listeners)
             listener.onMetadataUpdate(cluster);
 
         // Do this after notifying listeners as subscribed topics' list can be changed by listeners
+        // 通知listeners后再进行这个操作是因为
+        // 订阅的 topic 列表可以被listeners改变
         this.cluster = this.needMetadataForAllTopics ? getClusterForCurrentTopics(cluster) : cluster;
 
         notifyAll();
@@ -189,7 +223,7 @@ public final class Metadata {
     public synchronized void failedUpdate(long now) {
         this.lastRefreshMs = now;
     }
-    
+
     /**
      * @return The current metadata version
      */
@@ -213,6 +247,7 @@ public final class Metadata {
 
     /**
      * Set state to indicate if metadata for all topics in Kafka cluster is required or not.
+     *
      * @param needMetadataForAllTopics boolean indicating need for metadata of all topics in cluster.
      */
     public synchronized void needMetadataForAllTopics(boolean needMetadataForAllTopics) {
@@ -244,20 +279,27 @@ public final class Metadata {
      * MetadataUpdate Listener
      */
     public interface Listener {
+
         void onMetadataUpdate(Cluster cluster);
     }
 
+    /**
+     * 获取集群中的topic
+     */
     private Cluster getClusterForCurrentTopics(Cluster cluster) {
         Set<String> unauthorizedTopics = new HashSet<>();
         Collection<PartitionInfo> partitionInfos = new ArrayList<>();
         List<Node> nodes = Collections.emptyList();
+
         if (cluster != null) {
             unauthorizedTopics.addAll(cluster.unauthorizedTopics());
             unauthorizedTopics.retainAll(this.topics);
 
+            // 获取topic set 中的所有分区信息
             for (String topic : this.topics) {
                 partitionInfos.addAll(cluster.partitionsForTopic(topic));
             }
+
             nodes = cluster.nodes();
         }
         return new Cluster(nodes, partitionInfos, unauthorizedTopics);

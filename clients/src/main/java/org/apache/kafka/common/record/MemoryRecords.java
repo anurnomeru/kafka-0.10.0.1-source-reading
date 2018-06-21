@@ -3,9 +3,9 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -75,29 +75,39 @@ public class MemoryRecords implements Records {
      * Append the given record and offset to the buffer
      */
     public void append(long offset, Record record) {
-        if (!writable)
+        if (!writable) {
             throw new IllegalStateException("Memory records is not writable");
+        }
 
         int size = record.size();
         compressor.putLong(offset);
         compressor.putInt(size);
         compressor.put(record.buffer());
         compressor.recordWritten(size + Records.LOG_OVERHEAD);
-        record.buffer().rewind();
+        record.buffer()
+              .rewind();
     }
 
     /**
      * Append a new record and offset to the buffer
+     *
+     * 将消息与offset添加到buffer中，返回crc校验值
+     *
      * @return crc of the record
      */
     public long append(long offset, long timestamp, byte[] key, byte[] value) {
-        if (!writable)
+        if (!writable) {
             throw new IllegalStateException("Memory records is not writable");
+        }
 
+        // 计算出消息有多长
         int size = Record.recordSize(key, value);
+
+        // 实际上是往DataOutputStream ：appendStream中添加消息
         compressor.putLong(offset);
         compressor.putInt(size);
         long crc = compressor.putRecord(timestamp, key, value);
+
         compressor.recordWritten(size + Records.LOG_OVERHEAD);
         return crc;
     }
@@ -113,10 +123,19 @@ public class MemoryRecords implements Records {
      * capacity will be the message size which is larger than the write limit, i.e. the batch size. In this case
      * the checking should be based on the capacity of the initialized buffer rather than the write limit in order
      * to accept this single record.
+     *
+     * 校验有没有空间来储存新的键值对
+     *
+     * 注意返回值是基于compressor写入bytes的预估，在使用压缩时，可能不会准确。
+     * 当这种情况发生了，接下来的append操作可能会导致基础byte buffer steam buffer进行buffer的动态重分配。
+     *
+     * 这里有一种特别的情况，当append的单条信息的容量大于batch容量，容量将会变成消息的大小，在这种情况下，
+     * 校验会基于初始化这个buffer的容量，而非写入限制来接收这条消息。
      */
     public boolean hasRoomFor(byte[] key, byte[] value) {
-        if (!this.writable)
+        if (!this.writable) {
             return false;
+        }
 
         return this.compressor.numRecordsWritten() == 0 ?
             this.initialCapacity >= Records.LOG_OVERHEAD + Record.recordSize(key, value) :
@@ -129,6 +148,7 @@ public class MemoryRecords implements Records {
 
     /**
      * Close this batch for no more appends
+     * 关闭batch
      */
     public void close() {
         if (writable) {
@@ -149,7 +169,8 @@ public class MemoryRecords implements Records {
      */
     public int sizeInBytes() {
         if (writable) {
-            return compressor.buffer().position();
+            return compressor.buffer()
+                             .position();
         } else {
             return buffer.limit();
         }
@@ -159,10 +180,11 @@ public class MemoryRecords implements Records {
      * The compression rate of this record set
      */
     public double compressionRate() {
-        if (compressor == null)
+        if (compressor == null) {
             return 1.0;
-        else
+        } else {
             return compressor.compressionRate();
+        }
     }
 
     /**
@@ -177,8 +199,9 @@ public class MemoryRecords implements Records {
      * Get the byte buffer that backs this records instance for reading
      */
     public ByteBuffer buffer() {
-        if (writable)
+        if (writable) {
             throw new IllegalStateException("The memory records must not be writable any more before getting its underlying buffer");
+        }
 
         return buffer.duplicate();
     }
@@ -187,13 +210,14 @@ public class MemoryRecords implements Records {
     public Iterator<LogEntry> iterator() {
         if (writable) {
             // flip on a duplicate buffer for reading
-            return new RecordsIterator((ByteBuffer) this.buffer.duplicate().flip(), false);
+            return new RecordsIterator((ByteBuffer) this.buffer.duplicate()
+                                                               .flip(), false);
         } else {
             // do not need to flip for non-writable buffer
             return new RecordsIterator(this.buffer.duplicate(), false);
         }
     }
-    
+
     @Override
     public String toString() {
         Iterator<LogEntry> iter = iterator();
@@ -219,14 +243,20 @@ public class MemoryRecords implements Records {
     }
 
     public static class RecordsIterator extends AbstractIterator<LogEntry> {
+
         private final ByteBuffer buffer;
+
         private final DataInputStream stream;
+
         private final CompressionType type;
+
         private final boolean shallow;
+
         private RecordsIterator innerIter;
 
         // The variables for inner iterator
         private final ArrayDeque<LogEntry> logEntries;
+
         private final long absoluteBaseOffset;
 
         public RecordsIterator(ByteBuffer buffer, boolean shallow) {
@@ -240,22 +270,29 @@ public class MemoryRecords implements Records {
 
         // Private constructor for inner iterator.
         private RecordsIterator(LogEntry entry) {
-            this.type = entry.record().compressionType();
-            this.buffer = entry.record().value();
+            this.type = entry.record()
+                             .compressionType();
+            this.buffer = entry.record()
+                               .value();
             this.shallow = true;
-            this.stream = Compressor.wrapForInput(new ByteBufferInputStream(this.buffer), type, entry.record().magic());
+            this.stream = Compressor.wrapForInput(new ByteBufferInputStream(this.buffer), type, entry.record()
+                                                                                                     .magic());
             long wrapperRecordOffset = entry.offset();
             // If relative offset is used, we need to decompress the entire message first to compute
             // the absolute offset.
-            if (entry.record().magic() > Record.MAGIC_VALUE_V0) {
+            if (entry.record()
+                     .magic() > Record.MAGIC_VALUE_V0) {
                 this.logEntries = new ArrayDeque<>();
-                long wrapperRecordTimestamp = entry.record().timestamp();
+                long wrapperRecordTimestamp = entry.record()
+                                                   .timestamp();
                 while (true) {
                     try {
                         LogEntry logEntry = getNextEntryFromStream();
-                        Record recordWithTimestamp = new Record(logEntry.record().buffer(),
-                                                                wrapperRecordTimestamp,
-                                                                entry.record().timestampType());
+                        Record recordWithTimestamp = new Record(logEntry.record()
+                                                                        .buffer(),
+                            wrapperRecordTimestamp,
+                            entry.record()
+                                 .timestampType());
                         logEntries.add(new LogEntry(logEntry.offset(), recordWithTimestamp));
                     } catch (EOFException e) {
                         break;
@@ -263,17 +300,17 @@ public class MemoryRecords implements Records {
                         throw new KafkaException(e);
                     }
                 }
-                this.absoluteBaseOffset = wrapperRecordOffset - logEntries.getLast().offset();
+                this.absoluteBaseOffset = wrapperRecordOffset - logEntries.getLast()
+                                                                          .offset();
             } else {
                 this.logEntries = null;
                 this.absoluteBaseOffset = -1;
             }
-
         }
 
         /*
          * Read the next record from the buffer.
-         * 
+         *
          * Note that in the compressed message set, each message value size is set as the size of the un-compressed
          * version of the message value, so when we do de-compression allocating an array of the specified size for
          * reading compressed value data is sufficient.
@@ -284,8 +321,9 @@ public class MemoryRecords implements Records {
                 try {
                     LogEntry entry = getNextEntry();
                     // No more record to return.
-                    if (entry == null)
+                    if (entry == null) {
                         return allDone();
+                    }
 
                     // Convert offset to absolute offset if needed.
                     if (absoluteBaseOffset >= 0) {
@@ -294,7 +332,8 @@ public class MemoryRecords implements Records {
                     }
 
                     // decide whether to go shallow or deep iteration if it is compressed
-                    CompressionType compression = entry.record().compressionType();
+                    CompressionType compression = entry.record()
+                                                       .compressionType();
                     if (compression == CompressionType.NONE || shallow) {
                         return entry;
                     } else {
@@ -318,10 +357,11 @@ public class MemoryRecords implements Records {
         }
 
         private LogEntry getNextEntry() throws IOException {
-            if (logEntries != null)
+            if (logEntries != null) {
                 return getNextEntryFromEntryList();
-            else
+            } else {
                 return getNextEntryFromStream();
+            }
         }
 
         private LogEntry getNextEntryFromEntryList() {
@@ -333,16 +373,18 @@ public class MemoryRecords implements Records {
             long offset = stream.readLong();
             // read record size
             int size = stream.readInt();
-            if (size < 0)
+            if (size < 0) {
                 throw new IllegalStateException("Record with size " + size);
+            }
             // read the record, if compression is used we cannot depend on size
             // and hence has to do extra copy
             ByteBuffer rec;
             if (type == CompressionType.NONE) {
                 rec = buffer.slice();
                 int newPos = buffer.position() + size;
-                if (newPos > buffer.limit())
+                if (newPos > buffer.limit()) {
                     return null;
+                }
                 buffer.position(newPos);
                 rec.limit(size);
             } else {

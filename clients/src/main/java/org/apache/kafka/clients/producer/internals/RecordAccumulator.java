@@ -148,6 +148,10 @@ public final class RecordAccumulator {
      * The append result will contain the future metadata, and flag for whether the appended batch is full or a new batch is created
      * <p>
      *
+     * 将消息添加到accumulator，返回添加的结果
+     *
+     * 添加结果将包含future metadata，并在batch满后，或新的batch创建后，记一个标记。
+     *
      * @param tp The topic/partition to which this record is being sent
      * @param timestamp The timestamp of the record
      * @param key The key for the record
@@ -163,9 +167,13 @@ public final class RecordAccumulator {
                                      long maxTimeToBlock) throws InterruptedException {
         // We keep track of the number of appending thread to make sure we do not miss batches in
         // abortIncompleteBatches().
+
+        // TODO：它是干嘛的？
+        // 我们持续跟踪添加消息进程的num，来确保我们不会在abortIncompleteBatches()中丢失batch
         appendsInProgress.incrementAndGet();
         try {
             // check if we have an in-progress batch
+            // 检查是否有一个正在进行的batch
             Deque<RecordBatch> dq = getOrCreateDeque(tp);
             synchronized (dq) {
                 if (closed)
@@ -206,8 +214,11 @@ public final class RecordAccumulator {
     /**
      * If `RecordBatch.tryAppend` fails (i.e. the record batch is full), close its memory records to release temporary
      * resources (like compression streams buffers).
+     *
+     * 如果RecordBatch.tryAppend失败了（消息batch满了），关闭它的内存records来释放临时资源（有点像compression streams buffers）
      */
     private RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, Callback callback, Deque<RecordBatch> deque) {
+        // 获取deque中最后一个
         RecordBatch last = deque.peekLast();
         if (last != null) {
             FutureRecordMetadata future = last.tryAppend(timestamp, key, value, callback, time.milliseconds());
@@ -417,6 +428,7 @@ public final class RecordAccumulator {
 
     /**
      * Get the deque for the given topic-partition, creating it if necessary.
+     * 获取主题下分区的deque，或者需要时创建一个
      */
     private Deque<RecordBatch> getOrCreateDeque(TopicPartition tp) {
         Deque<RecordBatch> d = this.batches.get(tp);

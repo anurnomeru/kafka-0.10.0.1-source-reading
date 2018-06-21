@@ -203,7 +203,10 @@ public class Compressor {
     public long putRecord(long timestamp, byte[] key, byte[] value, CompressionType type,
                           int valueOffset, int valueSize) {
         // put a record as un-compressed into the underlying stream
+
+        // crc校验计算
         long crc = Record.computeChecksum(timestamp, key, value, type, valueOffset, valueSize);
+
         byte attributes = Record.computeAttributes(type);
         putRecord(crc, attributes, timestamp, key, value, valueOffset, valueSize);
         return crc;
