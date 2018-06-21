@@ -32,7 +32,7 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
     private final int serializedValueSize;
 
     public FutureRecordMetadata(ProduceRequestResult result, long relativeOffset, long timestamp,
-                                long checksum, int serializedKeySize, int serializedValueSize) {
+        long checksum, int serializedKeySize, int serializedValueSize) {
         this.result = result;
         this.relativeOffset = relativeOffset;
         this.timestamp = timestamp;

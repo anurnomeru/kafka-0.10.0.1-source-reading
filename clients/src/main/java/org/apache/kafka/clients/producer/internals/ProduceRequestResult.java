@@ -26,12 +26,15 @@ import org.apache.kafka.common.TopicPartition;
  * A class that models the future completion of a produce request for a single partition. There is one of these per
  * partition in a produce request and it is shared by all the {@link RecordMetadata} instances that are batched together
  * for the same partition in the request.
+ *
+ * 这是生产者对一个分区的请求的完成情况的类。每请求一次分区就有一个这个类，这个类会被一次batch中的所有实例共享。
+ *
  */
 public final class ProduceRequestResult {
 
     private final CountDownLatch latch = new CountDownLatch(1);
     private volatile TopicPartition topicPartition;
-    private volatile long baseOffset = -1L;
+    private volatile long baseOffset = -1L;// 第一条消息的偏移量
     private volatile RuntimeException error;
 
     public ProduceRequestResult() {
@@ -39,6 +42,8 @@ public final class ProduceRequestResult {
 
     /**
      * Mark this request as complete and unblock any threads waiting on its completion.
+     * 标识请求已经完成了，所有等待完成的线程将不再阻塞
+     *
      * @param topicPartition The topic and partition to which this record set was sent was sent
      * @param baseOffset The base offset assigned to the record
      * @param error The error that occurred if there was one, or null.

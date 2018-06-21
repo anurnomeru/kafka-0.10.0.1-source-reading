@@ -30,6 +30,7 @@ public class MemoryRecords implements Records {
     private final static int WRITE_LIMIT_FOR_READABLE_ONLY = -1;
 
     // the compressor used for appends-only
+    // compressor，只用来append消息
     private final Compressor compressor;
 
     // the write limit for writable buffer, which may be smaller than the buffer capacity
@@ -149,6 +150,7 @@ public class MemoryRecords implements Records {
     /**
      * Close this batch for no more appends
      * 关闭batch
+     * TODO: 注意，close的时候，会触发 buffer = compressor.buffer(); buffer.flip(); 这么一个操作
      */
     public void close() {
         if (writable) {
@@ -156,6 +158,7 @@ public class MemoryRecords implements Records {
             compressor.close();
 
             // flip the underlying buffer to be ready for reads
+            // flip 基础buffer来供读
             buffer = compressor.buffer();
             buffer.flip();
 

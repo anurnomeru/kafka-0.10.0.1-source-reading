@@ -183,6 +183,7 @@ public final class RecordAccumulator {
                     return appendResult;
             }
 
+            // 我们没有正在进行中的消息batch，尝试分配一个新的
             // we don't have an in-progress record batch try to allocate a new batch
             int size = Math.max(this.batchSize, Records.LOG_OVERHEAD + Record.recordSize(key, value));
             log.trace("Allocating a new {} byte message buffer for topic {} partition {}", size, tp.topic(), tp.partition());

@@ -39,6 +39,10 @@ import org.apache.kafka.common.utils.Time;
  * <li>It is fair. That is all memory is given to the longest waiting thread until it has sufficient memory. This
  * prevents starvation or deadlock when a thread asks for a large chunk of memory and needs to block until multiple
  * buffers are deallocated.
+ *
+ * 维持着【给定内存以下大小】的byteBuffer池。特别是它具有如下属性：
+ *
+ *
  * </ol>
  */
 public final class BufferPool {

@@ -33,31 +33,31 @@ public final class RecordBatch {
 
     private static final Logger log = LoggerFactory.getLogger(RecordBatch.class);
 
-    public int recordCount = 0;
+    public int recordCount = 0;// record个数（在recordBatch中的相对偏移量）
 
-    public int maxRecordSize = 0;
+    public int maxRecordSize = 0;// 最大的那个record的字节数
 
-    public volatile int attempts = 0;
+    public volatile int attempts = 0;// 尝试发送次数
 
-    public final long createdMs;
+    public final long createdMs;// 创建时间
 
-    public long drainedMs;
+    public long drainedMs;//
 
-    public long lastAttemptMs;
+    public long lastAttemptMs;// 最后一次尝试的时间
 
-    public final MemoryRecords records;
+    public final MemoryRecords records;// 储存数据用
 
-    public final TopicPartition topicPartition;
+    public final TopicPartition topicPartition;// 消息要发往的分区
 
-    public final ProduceRequestResult produceFuture;
+    public final ProduceRequestResult produceFuture;// 标识本类状态的future对象
 
-    public long lastAppendTime;
+    public long lastAppendTime;// 最后一次追加消息的时间
 
-    private final List<Thunk> thunks;
+    private final List<Thunk> thunks;// ？？？
 
     private long offsetCounter = 0L;
 
-    private boolean retry;
+    private boolean retry;// 是否正在重试
 
     public RecordBatch(TopicPartition tp, MemoryRecords records, long now) {
         this.createdMs = now;
@@ -108,6 +108,8 @@ public final class RecordBatch {
 
     /**
      * Complete the request
+     *
+     * 请求完成
      *
      * @param baseOffset The base offset of the messages assigned by the server
      * @param timestamp The timestamp returned by the broker.
