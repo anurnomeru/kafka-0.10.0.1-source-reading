@@ -42,6 +42,9 @@ import org.apache.kafka.common.utils.Time;
  *
  * 维持着【给定内存以下大小】的byteBuffer池。特别是它具有如下属性：
  *
+ *  - 它有一个特别的“poolable size”并且这个大小的buffer会维持在free list中重复利用
+ *  - 它是公平的，这是说所有的内存会交给等待最久的线程，直到它拥有足够的内存。当
+ * 一个线程请求一块大内存时，它需要阻塞着，直到很多buffer被释放，这种设计防止了饥饿或者死锁。
  *
  * </ol>
  */
@@ -85,6 +88,8 @@ public final class BufferPool {
     /**
      * Allocate a buffer of the given size. This method blocks if there is not enough memory and the buffer pool
      * is configured with blocking mode.
+     *
+     * 分配一块指定大小的buffer，当内有足够内存时，这个方法会阻塞，缓冲pool可以配置阻塞模式。
      * 
      * @param size The buffer size to allocate in bytes
      * @param maxTimeToBlockMs The maximum time in milliseconds to block for buffer memory to be available
@@ -103,11 +108,13 @@ public final class BufferPool {
         this.lock.lock();
         try {
             // check if we have a free buffer of the right size pooled
+            // 校验是否有合适的小的空闲的buffer
             if (size == poolableSize && !this.free.isEmpty())
                 return this.free.pollFirst();
 
             // now check if the request is immediately satisfiable with the
             // memory on hand or if we need to block
+            // 校验
             int freeListSize = this.free.size() * this.poolableSize;
             if (this.availableMemory + freeListSize >= size) {
                 // we have enough unallocated or pooled memory to immediately
