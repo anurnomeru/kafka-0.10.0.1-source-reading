@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.Utils;
  * A sensor applies a continuous sequence of numerical values to a set of associated metrics. For example a sensor on
  * message size would record a sequence of message sizes using the {@link #record(double)} api and would maintain a set
  * of metrics about request sizes such as the average or max.
+ *
  */
 public final class Sensor {
 
@@ -90,6 +91,9 @@ public final class Sensor {
     /**
      * Record a value at a known time. This method is slightly faster than {@link #record(double)} since it will reuse
      * the time stamp.
+     *
+     * 统计阻塞时间，这个方法比{@link #record(double)} 快一点，因为它会对时间戳进行复用
+     *
      * @param value The value we are recording
      * @param timeMs The current POSIX time in milliseconds
      * @throws QuotaViolationException if recording this value moves a metric beyond its configured maximum or minimum

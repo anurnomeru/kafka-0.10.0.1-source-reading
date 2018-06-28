@@ -109,7 +109,7 @@ public final class RecordBatch {
     /**
      * Complete the request
      *
-     * 请求完成
+     * 请求完成：正常响应、超时、或关闭生产者时调用这个
      *
      * @param baseOffset The base offset of the messages assigned by the server
      * @param timestamp The timestamp returned by the broker.
