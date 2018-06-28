@@ -73,7 +73,7 @@ public final class RecordBatch {
     /**
      * Append the record to the current record set and return the relative offset within that record set
      *
-     * 将消息append 到最近的消息set中，并返回该record相对的offset
+     * 将消息append 到最近的消息set中，并返回该record相对的offset，返回null代表没空间了
      *
      * @return The RecordSend corresponding to this record or null if there isn't sufficient room.
      */

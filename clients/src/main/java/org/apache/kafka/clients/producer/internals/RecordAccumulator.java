@@ -240,6 +240,13 @@ public final class RecordAccumulator {
      * resources (like compression streams buffers).
      *
      * 如果RecordBatch.tryAppend失败了（消息batch满了），关闭它的内存records来释放临时资源（有点像compression streams buffers）
+     *
+     * 返回null 可能是：
+     * <P>
+     * - 1、deque 为空
+     * <P>
+     * - 2、deque中最后一个RecordBatch 没有足够空间来放新消息
+     * <P>
      */
     private RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, Callback callback, Deque<RecordBatch> deque) {
         // 获取deque中最后一个
@@ -580,6 +587,9 @@ public final class RecordAccumulator {
 
         public final FutureRecordMetadata future;
 
+        /**
+         * deque.size() > 1 || last.records.isFull(
+         */
         public final boolean batchIsFull;
 
         public final boolean newBatchCreated;
