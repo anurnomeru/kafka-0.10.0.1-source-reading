@@ -136,7 +136,8 @@ public final class BufferPool {
                 this.availableMemory -= size;
                 lock.unlock();
                 return ByteBuffer.allocate(size);
-            } else {
+
+            } else {// 现在可用的内存大小无法满足
                 // we are out of memory and will have to block
                 // 需要的内存可能会导致溢出，所以需要阻塞
                 int accumulated = 0;
@@ -148,7 +149,7 @@ public final class BufferPool {
 
                 // loop over and over until we have a buffer or have reserved
                 // enough memory to allocate one
-                // 循环等待
+                // 循环等待，直到获取到申请到足够的内存
                 while (accumulated < size) {
                     long startWaitNs = time.nanoseconds();
                     long timeNs;
@@ -183,11 +184,14 @@ public final class BufferPool {
                         buffer = this.free.pollFirst();
                         accumulated = size;
                     } else {
+
+                        //todo: 走到这里说明申请的大小要大于poolableSize，或者free为空
                         // we'll need to allocate memory, but we may only get
                         // part of what we need on this iteration
                         // 需要申请内存，但是在这个循环可能只能从中获取需要内存的一部分，也就是说太大了，会再获取一次
                         // size：要申请的大小。
                         freeUp(size - accumulated);
+
                         int got = (int) Math.min(size - accumulated, this.availableMemory);
                         this.availableMemory -= got;
                         accumulated += got;
@@ -203,7 +207,7 @@ public final class BufferPool {
 
                 // signal any additional waiters if there is more memory left
                 // over for them
-                // 通知其他waiters.
+                // 通知其他waiters去拿内存
                 if (this.availableMemory > 0 || !this.free.isEmpty()) {
                     if (!this.waiters.isEmpty()) {
                         this.waiters.peekFirst()
@@ -213,9 +217,9 @@ public final class BufferPool {
 
                 // unlock and return the buffer
                 lock.unlock();
-                if (buffer == null) {
+                if (buffer == null) {// buffer = null 代表内存时直接从free中轮询释放的
                     return ByteBuffer.allocate(size);
-                } else {
+                } else {// buffer不为空，是直接复用free中的内存
                     return buffer;
                 }
             }
@@ -231,10 +235,13 @@ public final class BufferPool {
      * buffers (if needed)
      *
      * 当free列表不为空，并且可用内存小于申请内存时，来进行free列表的内存释放。
+     * ：： 还是从free中取，这个取法，可以取多个
+     * 直到取空，或者取出来的空间满足
      */
     private void freeUp(int size) {
 
         // 当free列表不为空，并且可用内存小于申请内存时
+        // ：： 还是从free中取，这个取法，可以取多个
         while (!this.free.isEmpty() && this.availableMemory < size) {
             this.availableMemory += this.free.pollLast()
                                              .capacity();

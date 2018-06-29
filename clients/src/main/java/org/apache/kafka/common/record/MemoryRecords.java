@@ -113,6 +113,10 @@ public class MemoryRecords implements Records {
         return crc;
     }
 
+    public boolean isFull() {
+        return !this.writable || this.writeLimit <= this.compressor.estimatedBytesWritten();
+    }
+
     /**
      * Check if we have room for a new record containing the given key/value pair
      *
@@ -141,10 +145,6 @@ public class MemoryRecords implements Records {
         return this.compressor.numRecordsWritten() == 0 ?
             this.initialCapacity >= Records.LOG_OVERHEAD + Record.recordSize(key, value) :
             this.writeLimit >= this.compressor.estimatedBytesWritten() + Records.LOG_OVERHEAD + Record.recordSize(key, value);
-    }
-
-    public boolean isFull() {
-        return !this.writable || this.writeLimit <= this.compressor.estimatedBytesWritten();
     }
 
     /**

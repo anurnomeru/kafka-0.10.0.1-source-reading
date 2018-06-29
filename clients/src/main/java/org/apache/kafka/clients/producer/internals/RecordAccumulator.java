@@ -183,7 +183,6 @@ public final class RecordAccumulator {
         // We keep track of the number of appending thread to make sure we do not miss batches in
         // abortIncompleteBatches().
 
-        // TODO：它是干嘛的？
         // 我们持续跟踪添加消息进程的num，来确保我们不会在abortIncompleteBatches()中丢失batch
         appendsInProgress.incrementAndGet();
         try {
@@ -200,15 +199,25 @@ public final class RecordAccumulator {
                 }
             }
 
+            /*
+             * 如果走到了这里，要么deque 为空
+             * 要么deque中最后一个RecordBatch 没有足够空间来放新消息
+             */
+
             // 我们没有正在进行中的消息batch，尝试分配一个新的
             // we don't have an in-progress record batch try to allocate a new batch
+
+            // 算一下新batch要多大，默认取batchSize，如果消息size比batchSize大，则取消息size
+            // 去申请buffer大小时，如果没有比默认的大，取默认的
+            // 也就是说说buffer大小要么等于默认大小，要么大于默认大小
             int size = Math.max(this.batchSize, Records.LOG_OVERHEAD + Record.recordSize(key, value));
             log.trace("Allocating a new {} byte message buffer for topic {} partition {}", size, tp.topic(), tp.partition());
 
-            // 去申请buffer大小时，如果没有比默认的大，取默认的
-            // 也就是说说buffer大小要么等于默认大小，要么大于默认大小
             ByteBuffer buffer = free.allocate(size, maxTimeToBlock);
             synchronized (dq) {
+
+                // ================================ 看不懂为什么又append一次
+
                 // 获得dq的锁以后，需要去检查生产者是否已经关闭了，
                 // Need to check if producer is closed again after grabbing the dequeue lock.
                 if (closed) {
@@ -222,7 +231,10 @@ public final class RecordAccumulator {
                     free.deallocate(buffer);
                     return appendResult;
                 }
+                // ================================
+
                 MemoryRecords records = MemoryRecords.emptyRecords(buffer, compression, this.batchSize);
+                // 创建一个新的Batch
                 RecordBatch batch = new RecordBatch(tp, records, time.milliseconds());
                 FutureRecordMetadata future = Utils.notNull(batch.tryAppend(timestamp, key, value, callback, time.milliseconds()));
 
