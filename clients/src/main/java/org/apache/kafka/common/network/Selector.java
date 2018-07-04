@@ -75,6 +75,7 @@ import org.slf4j.LoggerFactory;
  *
  * This class is not thread safe!
  */
+@SuppressWarnings("Duplicates")
 public class Selector implements Selectable {
 
     private static final Logger log = LoggerFactory.getLogger(Selector.class);
@@ -310,7 +311,7 @@ public class Selector implements Selectable {
             throw new IllegalArgumentException("timeout should be >= 0");
         }
 
-        clear();
+        clear();// 将上一次poll方法的结果清理掉
 
         if (hasStagedReceives() || !immediatelyConnectedKeys.isEmpty()) {
             timeout = 0;
@@ -318,21 +319,21 @@ public class Selector implements Selectable {
 
         /* check ready keys */
         long startSelect = time.nanoseconds();
-        int readyKeys = select(timeout);
+        int readyKeys = select(timeout);// 等待I/O事件发生
         long endSelect = time.nanoseconds();
         currentTimeNanos = endSelect;
         this.sensors.selectTime.record(endSelect - startSelect, time.milliseconds());
 
         if (readyKeys > 0 || !immediatelyConnectedKeys.isEmpty()) {
-            pollSelectionKeys(this.nioSelector.selectedKeys(), false);
+            pollSelectionKeys(this.nioSelector.selectedKeys(), false);// 处理I/O的核心方法
             pollSelectionKeys(immediatelyConnectedKeys, true);
         }
 
-        addToCompletedReceives();
+        addToCompletedReceives();// 将stagedReceives复制到completedReceives集合中
 
         long endIo = time.nanoseconds();
         this.sensors.ioTime.record(endIo - endSelect, time.milliseconds());
-        maybeCloseOldestConnection();
+        maybeCloseOldestConnection();// 关闭长期空闲的连接
     }
 
     private void pollSelectionKeys(Iterable<SelectionKey> selectionKeys, boolean isImmediatelyConnected) {
@@ -340,25 +341,28 @@ public class Selector implements Selectable {
         while (iterator.hasNext()) {
             SelectionKey key = iterator.next();
             iterator.remove();
+            // 创建连接时(connect)将kafkaChannel注册到key上，就是为了在这里获取
             KafkaChannel channel = channel(key);
 
             // register all per-connection metrics at once
+            // 注册所有的每一次连接
             sensors.maybeRegisterConnectionMetrics(channel.id());
-            lruConnections.put(channel.id(), currentTimeNanos);
+            lruConnections.put(channel.id(), currentTimeNanos);// 记录一下当前channel最后一次使用的时间
 
             try {
-
                 /* complete any connections that have finished their handshake (either normally or immediately) */
                 if (isImmediatelyConnected || key.isConnectable()) {
+                    // finishConnect方法会先检测socketChannel是否建立完成，建立后，会取消对OP_CONNECT事件关注，开始关注OP_READ事件
                     if (channel.finishConnect()) {
-                        this.connected.add(channel.id());
+                        this.connected.add(channel.id());// 将当前channel id 添加到已连接的集合中
                         this.sensors.connectionCreated.record();
                     } else {
-                        continue;
+                        continue;// 代表连接未完成，则跳过对此Channel的后续处理
                     }
                 }
 
                 /* if channel is not ready finish prepare */
+                // TODO：第四章：身份验证
                 if (channel.isConnected() && !channel.ready()) {
                     channel.prepare();
                 }
