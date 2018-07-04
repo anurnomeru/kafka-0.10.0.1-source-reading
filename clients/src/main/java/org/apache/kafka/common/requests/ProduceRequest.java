@@ -47,6 +47,7 @@ public class ProduceRequest extends AbstractRequest {
     private final int timeout;
     private final Map<TopicPartition, ByteBuffer> partitionRecords;
 
+
     public ProduceRequest(short acks, int timeout, Map<TopicPartition, ByteBuffer> partitionRecords) {
         super(new Struct(CURRENT_SCHEMA));
         Map<String, Map<Integer, ByteBuffer>> recordsByTopic = CollectionUtils.groupDataByTopic(partitionRecords);

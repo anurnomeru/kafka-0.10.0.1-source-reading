@@ -79,32 +79,61 @@ public class Selector implements Selectable {
 
     private static final Logger log = LoggerFactory.getLogger(Selector.class);
 
+    /** 监听网络io */
     private final java.nio.channels.Selector nioSelector;
-    private final Map<String, KafkaChannel> channels;
-    private final List<Send> completedSends;
-    private final List<NetworkReceive> completedReceives;
-    private final Map<KafkaChannel, Deque<NetworkReceive>> stagedReceives;
-    private final Set<SelectionKey> immediatelyConnectedKeys;
-    private final List<String> disconnected;
-    private final List<String> connected;
-    private final List<String> failedSends;
-    private final Time time;
-    private final SelectorMetrics sensors;
-    private final String metricGrpPrefix;
-    private final Map<String, String> metricTags;
-    private final ChannelBuilder channelBuilder;
-    private final Map<String, Long> lruConnections;
-    private final long connectionsMaxIdleNanos;
-    private final int maxReceiveSize;
-    private final boolean metricsPerConnection;
-    private long currentTimeNanos;
-    private long nextIdleCloseCheckTime;
 
+    /** 可以根据nodeId获取到channel */
+    private final Map<String/* nodeId */, KafkaChannel> channels;
+
+    /** 已经完全发送出去的请求 */
+    private final List<Send> completedSends;
+
+    /** 已经完全接收到的请求 */
+    private final List<NetworkReceive> completedReceives;
+
+    /** 暂存一次OP_READ事件处理过程中读取到的全部请求，当一次 OP_READ 事件处理完成之后，会将stagedReceives集合中的请求保存到completeReceives */
+    private final Map<KafkaChannel, Deque<NetworkReceive>> stagedReceives;
+
+    private final Set<SelectionKey> immediatelyConnectedKeys;
+
+    /** 记录一次poll中断开的连接 */
+    private final List<String> disconnected;
+
+    /** 记录一次poll中新建立的连接 */
+    private final List<String> connected;
+
+    /** 记录一次poll发送失败的node */
+    private final List<String> failedSends;
+
+    private final Time time;
+
+    private final SelectorMetrics sensors;
+
+    private final String metricGrpPrefix;
+
+    private final Map<String, String> metricTags;
+
+    /** 用于创建KafkaChannel */
+    private final ChannelBuilder channelBuilder;
+
+    /** 记录各个连接的使用情况，据此关闭空闲时间超过 connectionsMaxIdleNanos 的链接 */
+    private final Map<String, Long> lruConnections;
+
+    private final long connectionsMaxIdleNanos;
+
+    private final int maxReceiveSize;
+
+    private final boolean metricsPerConnection;
+
+    private long currentTimeNanos;
+
+    private long nextIdleCloseCheckTime;
 
     /**
      * Create a new nioSelector
      */
-    public Selector(int maxReceiveSize, long connectionMaxIdleMs, Metrics metrics, Time time, String metricGrpPrefix, Map<String, String> metricTags, boolean metricsPerConnection, ChannelBuilder channelBuilder) {
+    public Selector(int maxReceiveSize, long connectionMaxIdleMs, Metrics metrics, Time time, String metricGrpPrefix, Map<String, String> metricTags, boolean metricsPerConnection,
+        ChannelBuilder channelBuilder) {
         try {
             this.nioSelector = java.nio.channels.Selector.open();
         } catch (IOException e) {
@@ -137,35 +166,46 @@ public class Selector implements Selectable {
     }
 
     /**
+     * 核心方法，负责创建KafkaChanel
+     *
      * Begin connecting to the given address and add the connection to this nioSelector associated with the given id
      * number.
      * <p>
+     * 开始连接到指定的地址并且将连接添加到与给定id相关联的nioSelector
+     *
+     * <p>
      * Note that this call only initiates the connection, which will be completed on a future {@link #poll(long)}
      * call. Check {@link #connected()} to see which (if any) connections have completed after a given poll call.
+     * 注意这个方法只会在调用poll后才启动连接，检查{@link #connected()}来看看哪个连接在调用poll后连接完成。
+     *
      * @param id The id for the new connection
      * @param address The address to connect to
      * @param sendBufferSize The send buffer for the new connection
      * @param receiveBufferSize The receive buffer for the new connection
+     *
      * @throws IllegalStateException if there is already a connection for that id
      * @throws IOException if DNS resolution fails on the hostname or if the broker is down
      */
     @Override
     public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException {
-        if (this.channels.containsKey(id))
+        if (this.channels.containsKey(id)) {
             throw new IllegalStateException("There is already a connection for id " + id);
+        }
 
-        SocketChannel socketChannel = SocketChannel.open();
-        socketChannel.configureBlocking(false);
+        SocketChannel socketChannel = SocketChannel.open();// 创建一个socketChannel，并且在调用 socketChannel.connect(address)，后打开连接
+        socketChannel.configureBlocking(false);// 非阻塞模式
         Socket socket = socketChannel.socket();
-        socket.setKeepAlive(true);
-        if (sendBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
-            socket.setSendBufferSize(sendBufferSize);
-        if (receiveBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
-            socket.setReceiveBufferSize(receiveBufferSize);
+        socket.setKeepAlive(true);// 设置为长连接
+        if (sendBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE) {
+            socket.setSendBufferSize(sendBufferSize);// 设置SO_SNDBUF 大小
+        }
+        if (receiveBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE) {
+            socket.setReceiveBufferSize(receiveBufferSize);// 设置 SO_RCVBUF 大小
+        }
         socket.setTcpNoDelay(true);
         boolean connected;
         try {
-            connected = socketChannel.connect(address);
+            connected = socketChannel.connect(address);// 因为是非阻塞模式，所以方法可能会在连接正式连接之前返回
         } catch (UnresolvedAddressException e) {
             socketChannel.close();
             throw new IOException("Can't resolve address: " + address, e);
@@ -173,10 +213,10 @@ public class Selector implements Selectable {
             socketChannel.close();
             throw e;
         }
-        SelectionKey key = socketChannel.register(nioSelector, SelectionKey.OP_CONNECT);
-        KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize);
-        key.attach(channel);
-        this.channels.put(id, channel);
+        SelectionKey key = socketChannel.register(nioSelector, SelectionKey.OP_CONNECT);// 将当前这个socketChannel注册到nioSelector上，TODO：并关注OP_CONNECT事件
+        KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize);// 创建KafkaChannel
+        key.attach(channel);// 将channel绑定到key上
+        this.channels.put(id, channel);// 将 nodeId 和 Channel绑定
 
         if (connected) {
             // OP_CONNECT won't trigger for immediately connected channels
@@ -225,6 +265,7 @@ public class Selector implements Selectable {
 
     /**
      * Queue the given request for sending in the subsequent {@link #poll(long)} calls
+     *
      * @param send The request to send
      */
     public void send(Send send) {
@@ -258,19 +299,22 @@ public class Selector implements Selectable {
      * and pop response and add to the completedReceives.
      *
      * @param timeout The amount of time to wait, in milliseconds, which must be non-negative
+     *
      * @throws IllegalArgumentException If `timeout` is negative
      * @throws IllegalStateException If a send is given for which we have no existing connection or for which there is
-     *         already an in-progress send
+     * already an in-progress send
      */
     @Override
     public void poll(long timeout) throws IOException {
-        if (timeout < 0)
+        if (timeout < 0) {
             throw new IllegalArgumentException("timeout should be >= 0");
+        }
 
         clear();
 
-        if (hasStagedReceives() || !immediatelyConnectedKeys.isEmpty())
+        if (hasStagedReceives() || !immediatelyConnectedKeys.isEmpty()) {
             timeout = 0;
+        }
 
         /* check ready keys */
         long startSelect = time.nanoseconds();
@@ -309,19 +353,22 @@ public class Selector implements Selectable {
                     if (channel.finishConnect()) {
                         this.connected.add(channel.id());
                         this.sensors.connectionCreated.record();
-                    } else
+                    } else {
                         continue;
+                    }
                 }
 
                 /* if channel is not ready finish prepare */
-                if (channel.isConnected() && !channel.ready())
+                if (channel.isConnected() && !channel.ready()) {
                     channel.prepare();
+                }
 
                 /* if channel is ready read from any connections that have readable data */
                 if (channel.ready() && key.isReadable() && !hasStagedReceive(channel)) {
                     NetworkReceive networkReceive;
-                    while ((networkReceive = channel.read()) != null)
+                    while ((networkReceive = channel.read()) != null) {
                         addToStagedReceives(channel, networkReceive);
+                    }
                 }
 
                 /* if channel is ready write to any sockets that have space in their buffer and for which we have data */
@@ -338,13 +385,13 @@ public class Selector implements Selectable {
                     close(channel);
                     this.disconnected.add(channel.id());
                 }
-
             } catch (Exception e) {
                 String desc = channel.socketDescription();
-                if (e instanceof IOException)
+                if (e instanceof IOException) {
                     log.debug("Connection with {} disconnected", desc, e);
-                else
+                } else {
                     log.warn("Unexpected error from {}; closing connection", desc, e);
+                }
                 close(channel);
                 this.disconnected.add(channel.id());
             }
@@ -408,14 +455,17 @@ public class Selector implements Selectable {
             if (lruConnections.isEmpty()) {
                 nextIdleCloseCheckTime = currentTimeNanos + connectionsMaxIdleNanos;
             } else {
-                Map.Entry<String, Long> oldestConnectionEntry = lruConnections.entrySet().iterator().next();
+                Map.Entry<String, Long> oldestConnectionEntry = lruConnections.entrySet()
+                                                                              .iterator()
+                                                                              .next();
                 Long connectionLastActiveTime = oldestConnectionEntry.getValue();
                 nextIdleCloseCheckTime = connectionLastActiveTime + connectionsMaxIdleNanos;
                 if (currentTimeNanos > nextIdleCloseCheckTime) {
                     String connectionId = oldestConnectionEntry.getKey();
-                    if (log.isTraceEnabled())
+                    if (log.isTraceEnabled()) {
                         log.trace("About to close the idle connection from " + connectionId
-                                + " due to being idle for " + (currentTimeNanos - connectionLastActiveTime) / 1000 / 1000 + " millis");
+                            + " due to being idle for " + (currentTimeNanos - connectionLastActiveTime) / 1000 / 1000 + " millis");
+                    }
 
                     disconnected.add(connectionId);
                     close(connectionId);
@@ -440,18 +490,19 @@ public class Selector implements Selectable {
      * Check for data, waiting up to the given timeout.
      *
      * @param ms Length of time to wait, in milliseconds, which must be non-negative
+     *
      * @return The number of keys ready
-     * @throws IllegalArgumentException
-     * @throws IOException
      */
     private int select(long ms) throws IOException {
-        if (ms < 0L)
+        if (ms < 0L) {
             throw new IllegalArgumentException("timeout should be >= 0");
+        }
 
-        if (ms == 0L)
+        if (ms == 0L) {
             return this.nioSelector.selectNow();
-        else
+        } else {
             return this.nioSelector.select(ms);
+        }
     }
 
     /**
@@ -459,8 +510,9 @@ public class Selector implements Selectable {
      */
     public void close(String id) {
         KafkaChannel channel = this.channels.get(id);
-        if (channel != null)
+        if (channel != null) {
             close(channel);
+        }
     }
 
     /**
@@ -478,7 +530,6 @@ public class Selector implements Selectable {
         this.sensors.connectionClosed.record();
     }
 
-
     /**
      * check if channel is ready
      */
@@ -490,8 +541,9 @@ public class Selector implements Selectable {
 
     private KafkaChannel channelOrFail(String id) {
         KafkaChannel channel = this.channels.get(id);
-        if (channel == null)
+        if (channel == null) {
             throw new IllegalStateException("Attempt to retrieve channel for which there is no open connection. Connection id " + id + " existing connections " + channels.keySet());
+        }
         return channel;
     }
 
@@ -529,19 +581,20 @@ public class Selector implements Selectable {
      */
     private boolean hasStagedReceives() {
         for (KafkaChannel channel : this.stagedReceives.keySet()) {
-            if (!channel.isMute())
+            if (!channel.isMute()) {
                 return true;
+            }
         }
         return false;
     }
-
 
     /**
      * adds a receive to staged receives
      */
     private void addToStagedReceives(KafkaChannel channel, NetworkReceive receive) {
-        if (!stagedReceives.containsKey(channel))
+        if (!stagedReceives.containsKey(channel)) {
             stagedReceives.put(channel, new ArrayDeque<NetworkReceive>());
+        }
 
         Deque<NetworkReceive> deque = stagedReceives.get(channel);
         deque.add(receive);
@@ -552,7 +605,8 @@ public class Selector implements Selectable {
      */
     private void addToCompletedReceives() {
         if (!this.stagedReceives.isEmpty()) {
-            Iterator<Map.Entry<KafkaChannel, Deque<NetworkReceive>>> iter = this.stagedReceives.entrySet().iterator();
+            Iterator<Map.Entry<KafkaChannel, Deque<NetworkReceive>>> iter = this.stagedReceives.entrySet()
+                                                                                               .iterator();
             while (iter.hasNext()) {
                 Map.Entry<KafkaChannel, Deque<NetworkReceive>> entry = iter.next();
                 KafkaChannel channel = entry.getKey();
@@ -560,27 +614,37 @@ public class Selector implements Selectable {
                     Deque<NetworkReceive> deque = entry.getValue();
                     NetworkReceive networkReceive = deque.poll();
                     this.completedReceives.add(networkReceive);
-                    this.sensors.recordBytesReceived(channel.id(), networkReceive.payload().limit());
-                    if (deque.isEmpty())
+                    this.sensors.recordBytesReceived(channel.id(), networkReceive.payload()
+                                                                                 .limit());
+                    if (deque.isEmpty()) {
                         iter.remove();
+                    }
                 }
             }
         }
     }
 
-
     private class SelectorMetrics {
+
         private final Metrics metrics;
+
         public final Sensor connectionClosed;
+
         public final Sensor connectionCreated;
+
         public final Sensor bytesTransferred;
+
         public final Sensor bytesSent;
+
         public final Sensor bytesReceived;
+
         public final Sensor selectTime;
+
         public final Sensor ioTime;
 
         /* Names of metrics that are not registered through sensors */
         private final List<MetricName> topLevelMetricNames = new ArrayList<>();
+
         private final List<Sensor> sensors = new ArrayList<>();
 
         public SelectorMetrics(Metrics metrics) {
@@ -588,7 +652,7 @@ public class Selector implements Selectable {
             String metricGrpName = metricGrpPrefix + "-metrics";
             StringBuilder tagsSuffix = new StringBuilder();
 
-            for (Map.Entry<String, String> tag: metricTags.entrySet()) {
+            for (Map.Entry<String, String> tag : metricTags.entrySet()) {
                 tagsSuffix.append(tag.getKey());
                 tagsSuffix.append("-");
                 tagsSuffix.append(tag.getValue());
@@ -625,7 +689,8 @@ public class Selector implements Selectable {
             this.selectTime = sensor("select-time:" + tagsSuffix.toString());
             metricName = metrics.metricName("select-rate", metricGrpName, "Number of times the I/O layer checked for new I/O to perform per second", metricTags);
             this.selectTime.add(metricName, new Rate(new Count()));
-            metricName = metrics.metricName("io-wait-time-ns-avg", metricGrpName, "The average length of time the I/O thread spent waiting for a socket ready for reads or writes in nanoseconds.", metricTags);
+            metricName = metrics.metricName("io-wait-time-ns-avg", metricGrpName, "The average length of time the I/O thread spent waiting for a socket ready for reads or writes in nanoseconds.",
+                metricTags);
             this.selectTime.add(metricName, new Avg());
             metricName = metrics.metricName("io-wait-ratio", metricGrpName, "The fraction of time the I/O thread spent waiting.", metricTags);
             this.selectTime.add(metricName, new Rate(TimeUnit.NANOSECONDS));
@@ -639,6 +704,7 @@ public class Selector implements Selectable {
             metricName = metrics.metricName("connection-count", metricGrpName, "The current number of active connections.", metricTags);
             topLevelMetricNames.add(metricName);
             this.metrics.addMetric(metricName, new Measurable() {
+
                 public double measure(MetricConfig config, long now) {
                     return channels.size();
                 }
@@ -696,8 +762,9 @@ public class Selector implements Selectable {
             if (!connectionId.isEmpty()) {
                 String nodeRequestName = "node-" + connectionId + ".bytes-sent";
                 Sensor nodeRequest = this.metrics.getSensor(nodeRequestName);
-                if (nodeRequest != null)
+                if (nodeRequest != null) {
                     nodeRequest.record(bytes, now);
+                }
             }
         }
 
@@ -707,8 +774,9 @@ public class Selector implements Selectable {
             if (!connection.isEmpty()) {
                 String nodeRequestName = "node-" + connection + ".bytes-received";
                 Sensor nodeRequest = this.metrics.getSensor(nodeRequestName);
-                if (nodeRequest != null)
+                if (nodeRequest != null) {
                     nodeRequest.record(bytes, now);
+                }
             }
         }
 
@@ -719,5 +787,4 @@ public class Selector implements Selectable {
                 metrics.removeSensor(sensor.name());
         }
     }
-
 }

@@ -12,7 +12,6 @@
  */
 package org.apache.kafka.common.network;
 
-
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.List;
@@ -29,10 +28,12 @@ public interface Selectable {
 
     /**
      * Begin establishing a socket connection to the given address identified by the given address
+     *
      * @param id The id for this connection
      * @param address The address to connect to
      * @param sendBufferSize The send buffer for the socket
      * @param receiveBufferSize The receive buffer for the socket
+     *
      * @throws IOException If we cannot begin connecting
      */
     public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException;
@@ -54,14 +55,15 @@ public interface Selectable {
 
     /**
      * Queue the given request for sending in the subsequent {@link #poll(long) poll()} calls
+     *
      * @param send The request to send
      */
     public void send(Send send);
 
     /**
      * Do I/O. Reads, writes, connection establishment, etc.
+     *
      * @param timeout The amount of time to block if there is nothing to do
-     * @throws IOException
      */
     public void poll(long timeout) throws IOException;
 
@@ -89,12 +91,14 @@ public interface Selectable {
 
     /**
      * Disable reads from the given connection
+     *
      * @param id The id for the connection
      */
     public void mute(String id);
 
     /**
      * Re-enable reads from the given connection
+     *
      * @param id The id for the connection
      */
     public void unmute(String id);
@@ -111,6 +115,7 @@ public interface Selectable {
 
     /**
      * returns true  if a channel is ready
+     *
      * @param id The id for the connection
      */
     public boolean isChannelReady(String id);
