@@ -370,16 +370,22 @@ public class Selector implements Selectable {
                 /* if channel is ready read from any connections that have readable data */
                 if (channel.ready() && key.isReadable() && !hasStagedReceive(channel)) {
                     NetworkReceive networkReceive;
+
+                    // TODO:这里为什么用while
                     while ((networkReceive = channel.read()) != null) {
+                        // TODO 不理解 p74
                         addToStagedReceives(channel, networkReceive);
                     }
                 }
 
                 /* if channel is ready write to any sockets that have space in their buffer and for which we have data */
+                // 如果channel的buffer已经有足够的空间 并且 我们有数据来准备好写sockets
                 if (channel.ready() && key.isWritable()) {
                     Send send = channel.write();
+                    // 这里会将KafkaChannel的send字段发送出去，如果未完成发送，则返回null
+                    // 否则将返回send
                     if (send != null) {
-                        this.completedSends.add(send);
+                        this.completedSends.add(send);// 添加到completedSends集合
                         this.sensors.recordBytesSent(channel.id(), send.size());
                     }
                 }
