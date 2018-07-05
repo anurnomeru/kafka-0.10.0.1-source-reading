@@ -138,6 +138,8 @@ public class KafkaChannel {
             throw new IllegalStateException("Attempt to begin a send operation with prior send operation still in progress.");
         }
         this.send = send;
+
+        // 关注 OP_WRITE 事件
         this.transportLayer.addInterestOps(SelectionKey.OP_WRITE);
     }
 
