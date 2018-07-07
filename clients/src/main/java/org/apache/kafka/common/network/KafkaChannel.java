@@ -29,16 +29,20 @@ import org.apache.kafka.common.utils.Utils;
 
 public class KafkaChannel {
 
+    // 节点id
     private final String id;
 
+    // 封装了SocketChannel和SelectionKey
     private final TransportLayer transportLayer;
 
     private final Authenticator authenticator;
 
     private final int maxReceiveSize;
 
+    // 底层是byteBuffer
     private NetworkReceive receive;
 
+    // 底层是byteBuffer
     private Send send;
 
     public KafkaChannel(String id, TransportLayer transportLayer, Authenticator authenticator, int maxReceiveSize) throws IOException {

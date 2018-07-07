@@ -48,12 +48,16 @@ import org.slf4j.LoggerFactory;
 
 /**
  * A nioSelector interface for doing non-blocking multi-connection network I/O.
+ *
+ * nioSelector 接口用于进行 非阻塞 多连接 的网络io
  * <p>
  * This class works with {@link NetworkSend} and {@link NetworkReceive} to transmit size-delimited network requests and
  * responses.
+ *
+ * 这个类通过{@link NetworkSend} 和 {@link NetworkReceive} 来对大小受限的网络请求和网络应答进行传输。
  * <p>
  * A connection can be added to the nioSelector associated with an integer id by doing
- *
+ * 连接关联一个nodeId，并添加到 nioSelector，我们可以通过nodeId 来进行nioSelector.connect操作
  * <pre>
  * nioSelector.connect(&quot;42&quot;, new InetSocketAddress(&quot;google.com&quot;, server.port), 64000, 64000);
  * </pre>
@@ -61,8 +65,12 @@ import org.slf4j.LoggerFactory;
  * The connect call does not block on the creation of the TCP connection, so the connect method only begins initiating
  * the connection. The successful invocation of this method does not mean a valid connection has been established.
  *
+ * 调用connect方法不会再创建tcp连接时阻塞，所以这个方法只是初始化连接，这个方法成功调用并不意味着连接已经建立
+ *
  * Sending requests, receiving responses, processing connection completions, and disconnections on the existing
  * connections are all done using the <code>poll()</code> call.
+ *
+ * 发送请求，接受应答，成功处理连接和断开连接 都只能在调用poll方法后进行？？？翻译的不对
  *
  * <pre>
  * nioSelector.send(new NetworkSend(myDestination, myBytes));
@@ -80,16 +88,16 @@ public class Selector implements Selectable {
 
     private static final Logger log = LoggerFactory.getLogger(Selector.class);
 
-    /** 监听网络io */
+    /** 监听网络io，java自带的selector */
     private final java.nio.channels.Selector nioSelector;
 
-    /** 可以根据nodeId获取到channel */
+    /** 可以根据nodeId获取到channel，KafkaChannel是对socketChannel的进一步封装 */
     private final Map<String/* nodeId */, KafkaChannel> channels;
 
-    /** 已经完全发送出去的请求 */
+    /** 记录已经完全发送出去的请求 */
     private final List<Send> completedSends;
 
-    /** 已经完全接收到的请求 */
+    /** 记录已经完全接收到的请求 */
     private final List<NetworkReceive> completedReceives;
 
     /** 暂存一次OP_READ事件处理过程中读取到的全部请求，当一次 OP_READ 事件处理完成之后，会将stagedReceives集合中的请求保存到completeReceives */
@@ -214,7 +222,7 @@ public class Selector implements Selectable {
             socketChannel.close();
             throw e;
         }
-        SelectionKey key = socketChannel.register(nioSelector, SelectionKey.OP_CONNECT);// 将当前这个socketChannel注册到nioSelector上，TODO：并关注OP_CONNECT事件
+        SelectionKey key = socketChannel.register(nioSelector, SelectionKey.OP_CONNECT);// 将当前这个socketChannel注册到nioSelector上，并关注OP_CONNECT事件
         KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize);// 创建KafkaChannel
         key.attach(channel);// 将channel绑定到key上
         this.channels.put(id, channel);// 将 nodeId 和 Channel绑定
@@ -313,16 +321,20 @@ public class Selector implements Selectable {
 
         clear();// 将上一次poll方法的结果清理掉
 
-        if (hasStagedReceives() || !immediatelyConnectedKeys.isEmpty()) {
+        if (hasStagedReceives() //TODO: ????????
+            || !immediatelyConnectedKeys.isEmpty()) {
             timeout = 0;
         }
 
         /* check ready keys */
         long startSelect = time.nanoseconds();
+
+        // readyKeys 已经准备好了的 SelectionKey 的数量
         int readyKeys = select(timeout);// 等待I/O事件发生
         long endSelect = time.nanoseconds();
         currentTimeNanos = endSelect;
-        this.sensors.selectTime.record(endSelect - startSelect, time.milliseconds());
+
+        this.sensors.selectTime.record(endSelect - startSelect, time.milliseconds());// TODO:???????
 
         if (readyKeys > 0 || !immediatelyConnectedKeys.isEmpty()) {
             pollSelectionKeys(this.nioSelector.selectedKeys(), false);// 处理I/O的核心方法
@@ -351,6 +363,7 @@ public class Selector implements Selectable {
 
             try {
                 /* complete any connections that have finished their handshake (either normally or immediately) */
+                // 完成三次握手的任意连接，无论是可以立即使用的channel，或者普通channel
                 if (isImmediatelyConnected || key.isConnectable()) {
                     // finishConnect方法会先检测socketChannel是否建立完成，建立后，会取消对OP_CONNECT事件关注，开始关注OP_READ事件
                     if (channel.finishConnect()) {
@@ -361,19 +374,20 @@ public class Selector implements Selectable {
                     }
                 }
 
-                /* if channel is not ready finish prepare */
+                /* if channel is not ready finish prepare */d
                 // TODO：第四章：身份验证
                 if (channel.isConnected() && !channel.ready()) {
                     channel.prepare();
                 }
 
+                // channel是否已经准备好从连接中读取任何可读数据
                 /* if channel is ready read from any connections that have readable data */
-                if (channel.ready() && key.isReadable() && !hasStagedReceive(channel)) {
+                if (channel.ready() // 连接的三次握手完成，并且 todo 权限验证通过
+                    && key.isReadable() // key已经准备好
+                    && !hasStagedReceive(channel)) {// todo：他的意思可能是正在这个通道正在读数据
                     NetworkReceive networkReceive;
 
-                    // TODO:这里为什么用while
-                    while ((networkReceive = channel.read()) != null) {
-                        // TODO 不理解 p74
+                    while ((networkReceive = channel.read()) != null) {// 看到这里！！！ on 7/6/2018 by Anur
                         addToStagedReceives(channel, networkReceive);
                     }
                 }
@@ -581,6 +595,7 @@ public class Selector implements Selectable {
 
     /**
      * Check if given channel has a staged receive
+     * 检查这个channel是否是多次接受
      */
     private boolean hasStagedReceive(KafkaChannel channel) {
         return stagedReceives.containsKey(channel);

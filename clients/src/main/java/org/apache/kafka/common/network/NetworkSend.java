@@ -20,6 +20,7 @@ import java.nio.ByteBuffer;
 
 /**
  * A size delimited Send that consists of a 4 byte network-ordered size N followed by N bytes of content
+ * 一个由 N 个 4byte 的 network-ordered size 组成的内容 的被限制大小的发送操作
  */
 public class NetworkSend extends ByteBufferSend {
 
