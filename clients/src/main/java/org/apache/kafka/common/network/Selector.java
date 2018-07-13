@@ -374,7 +374,7 @@ public class Selector implements Selectable {
                     }
                 }
 
-                /* if channel is not ready finish prepare */d
+                /* if channel is not ready finish prepare */
                 // TODO：第四章：身份验证
                 if (channel.isConnected() && !channel.ready()) {
                     channel.prepare();

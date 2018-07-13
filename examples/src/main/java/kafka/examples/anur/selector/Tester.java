@@ -71,8 +71,8 @@ public class Tester {
 
         int count = 0;
         byteBuffer.flip();
-//        fileChannelb.write(byteBuffer, size);
-//        byteBuffer.rewind();
+        //        fileChannelb.write(byteBuffer, size);
+        //        byteBuffer.rewind();
         while (byteBuffer.hasRemaining()) {
             System.out.println(count++);
             fileChannelb.write(byteBuffer, size);
