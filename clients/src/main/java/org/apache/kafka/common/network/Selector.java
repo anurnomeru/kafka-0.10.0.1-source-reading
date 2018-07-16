@@ -70,7 +70,7 @@ import org.slf4j.LoggerFactory;
  * Sending requests, receiving responses, processing connection completions, and disconnections on the existing
  * connections are all done using the <code>poll()</code> call.
  *
- * 发送请求，接受应答，成功处理连接和断开连接 都只能在调用poll方法后进行？？？翻译的不对
+ * 发送请求，接受应答，成功处理连接和断开连接，都是用poll来完成的
  *
  * <pre>
  * nioSelector.send(new NetworkSend(myDestination, myBytes));
@@ -78,11 +78,16 @@ import org.slf4j.LoggerFactory;
  * nioSelector.poll(TIMEOUT_MS);
  * </pre>
  *
+ *
+ * nioSelector维持着几个会在每次调用poll方法后重置的列表，这几个列表对各种渠道的getter都是可见的
+ *
+ *
  * The nioSelector maintains several lists that are reset by each call to <code>poll()</code> which are available via
  * various getters. These are reset by each call to <code>poll()</code>.
  *
  * This class is not thread safe!
  */
+@NotTheadSafe
 @SuppressWarnings("Duplicates")
 public class Selector implements Selectable {
 
@@ -92,6 +97,9 @@ public class Selector implements Selectable {
     private final java.nio.channels.Selector nioSelector;
 
     /** 可以根据nodeId获取到channel，KafkaChannel是对socketChannel的进一步封装 */
+    /**
+     * kafkaChannel 里面有节点id、验证器、tpLayer（包含socketChannel和selectionKey）、一个接受buffer、一个发送buffer
+     */
     private final Map<String/* nodeId */, KafkaChannel> channels;
 
     /** 记录已经完全发送出去的请求 */
@@ -103,6 +111,9 @@ public class Selector implements Selectable {
     /** 暂存一次OP_READ事件处理过程中读取到的全部请求，当一次 OP_READ 事件处理完成之后，会将stagedReceives集合中的请求保存到completeReceives */
     private final Map<KafkaChannel, Deque<NetworkReceive>> stagedReceives;
 
+    /**
+     * 可以立即连接的selectionKey
+     */
     private final Set<SelectionKey> immediatelyConnectedKeys;
 
     /** 记录一次poll中断开的连接 */
