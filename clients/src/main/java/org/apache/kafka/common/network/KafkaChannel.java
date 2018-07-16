@@ -33,9 +33,9 @@ public class KafkaChannel {
     private final String id;
 
     // 封装了SocketChannel和SelectionKey
-    private final TransportLayer transportLayer;
-
     private final Authenticator authenticator;
+
+    private final TransportLayer transportLayer;
 
     private final int maxReceiveSize;
 
@@ -144,9 +144,13 @@ public class KafkaChannel {
         this.send = send;
 
         // 关注 OP_WRITE 事件
+        // key.interestOps(key.interestOps() | ops);
         this.transportLayer.addInterestOps(SelectionKey.OP_WRITE);
     }
 
+    /**
+     * 接收数据，将数据保存在 NetworkReceive
+     */
     public NetworkReceive read() throws IOException {
         NetworkReceive result = null;
 
@@ -177,8 +181,14 @@ public class KafkaChannel {
         return receive.readFrom(transportLayer);
     }
 
+    /**
+     * 简单来说，就是将Send 里面的 buffer 转移到 TransportLayer(传输层)
+     * Send 实际上就是对 bytebufer 的封装
+     */
     private boolean send(Send send) throws IOException {
         send.writeTo(transportLayer);
+
+        // 判断completed，首先要没有剩余字节，其次不在【添加中】
         if (send.completed()) {
             transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
         }

@@ -83,6 +83,13 @@ public class Tester {
 
         System.out.println(e - sta);
 
+
+        if (permission.has(select)){
+            return;
+        } else {
+            permission.add(select);
+        }
+
         //        long sta = System.currentTimeMillis();
         //        FileInputStream fileInputStream = new FileInputStream("C:\\Users\\Anur\\Desktop\\centos.iso");
         //
