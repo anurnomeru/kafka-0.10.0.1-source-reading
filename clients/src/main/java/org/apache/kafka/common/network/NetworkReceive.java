@@ -24,13 +24,16 @@ import java.nio.channels.ScatteringByteChannel;
 public class NetworkReceive implements Receive {
 
     public final static String UNKNOWN_SOURCE = "";
+
     public final static int UNLIMITED = -1;
 
     private final String source;
-    private final ByteBuffer size;
-    private final int maxSize;
-    private ByteBuffer buffer;
 
+    private final ByteBuffer size;
+
+    private final int maxSize;
+
+    private ByteBuffer buffer;
 
     public NetworkReceive(String source, ByteBuffer buffer) {
         this.source = source;
@@ -74,29 +77,42 @@ public class NetworkReceive implements Receive {
     // Need a method to read from ReadableByteChannel because BlockingChannel requires read with timeout
     // See: http://stackoverflow.com/questions/2866557/timeout-for-socketchannel-doesnt-work
     // This can go away after we get rid of BlockingChannel
+
+    // 需要一个方法来从ReadableByteChannel读取数据因为BlockingChannel读取时需要一个超时机制
+    // 当项目废掉BlockingChannel时，会弃用这个方法
+
+    /**
+     * 首先拿到消息头，一般来说是四个字节的int（表示消息大小），简单校验以后，
+     * 去申请相应的空间，然后将它从 channel 读到 buffer。
+     */
     @Deprecated
     public long readFromReadableChannel(ReadableByteChannel channel) throws IOException {
         int read = 0;
         if (size.hasRemaining()) {
             int bytesRead = channel.read(size);
-            if (bytesRead < 0)
+            if (bytesRead < 0) {
                 throw new EOFException();
+            }
             read += bytesRead;
             if (!size.hasRemaining()) {
                 size.rewind();
                 int receiveSize = size.getInt();
-                if (receiveSize < 0)
+                if (receiveSize < 0) {
                     throw new InvalidReceiveException("Invalid receive (size = " + receiveSize + ")");
-                if (maxSize != UNLIMITED && receiveSize > maxSize)
+                }
+                if (maxSize != UNLIMITED && receiveSize > maxSize) {
                     throw new InvalidReceiveException("Invalid receive (size = " + receiveSize + " larger than " + maxSize + ")");
+                }
 
                 this.buffer = ByteBuffer.allocate(receiveSize);
             }
         }
+
         if (buffer != null) {
             int bytesRead = channel.read(buffer);
-            if (bytesRead < 0)
+            if (bytesRead < 0) {
                 throw new EOFException();
+            }
             read += bytesRead;
         }
 
@@ -106,5 +122,4 @@ public class NetworkReceive implements Receive {
     public ByteBuffer payload() {
         return this.buffer;
     }
-
 }

@@ -52,6 +52,23 @@ public class KafkaChannel {
         this.maxReceiveSize = maxReceiveSize;
     }
 
+    /**
+     * closeable.close();
+     *
+     * 对于 PlainTextTpLayer来说：
+     * 就是关闭 socketChannel，再关闭
+     *
+     * public void close() throws IOException {
+     * 　　　try {
+     * 　　　　　socketChannel.socket()
+     * 　　　　　　.close();
+     * 　　　　　socketChannel.close();
+     * 　　　} finally {
+     * 　　　　　key.attach(null);
+     * 　　　　　key.cancel();
+     * 　　　　　}
+     * 　　　}
+     */
     public void close() throws IOException {
         Utils.closeAll(transportLayer, authenticator);
     }
@@ -65,11 +82,16 @@ public class KafkaChannel {
 
     /**
      * Does handshake of transportLayer and authentication using configured authenticator
+     * tpLayer去做握手，然后用配置的认证器去做认证
      */
     public void prepare() throws IOException {
+
+        // 如果是 PlainTextTpLayer的话，这里是个空实现
         if (!transportLayer.ready()) {
             transportLayer.handshake();
         }
+
+        // 对于PlainTextTpLayer，主要就是做一下认证
         if (transportLayer.ready() && !authenticator.complete()) {
             authenticator.authenticate();
         }
@@ -79,6 +101,12 @@ public class KafkaChannel {
         transportLayer.disconnect();
     }
 
+    /**
+     * 通过tplayer判断socketChannel是否已经连接好了，
+     *
+     * 如果已经连接好了
+     * key 移除连接事件的监听，增加read的监听
+     */
     public boolean finishConnect() throws IOException {
         return transportLayer.finishConnect();
     }
@@ -177,6 +205,9 @@ public class KafkaChannel {
         return result;
     }
 
+    /**
+     * 把tpLayer的数据读取到receive
+     */
     private long receive(NetworkReceive receive) throws IOException {
         return receive.readFrom(transportLayer);
     }

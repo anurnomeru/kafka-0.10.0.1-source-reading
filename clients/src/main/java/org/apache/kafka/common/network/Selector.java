@@ -384,10 +384,10 @@ public class Selector implements Selectable {
                 /* if channel is ready read from any connections that have readable data */
                 if (channel.ready() // 连接的三次握手完成，并且 todo 权限验证通过
                     && key.isReadable() // key已经准备好
-                    && !hasStagedReceive(channel)) {// todo：他的意思可能是正在这个通道正在读数据
+                    && !hasStagedReceive(channel)) {                                              // todo：他的意思可能是正在这个通道正在读数据
                     NetworkReceive networkReceive;
 
-                    while ((networkReceive = channel.read()) != null) {// 看到这里！！！ on 7/6/2018 by Anur
+                    while ((networkReceive = channel.read()) != null) {
                         addToStagedReceives(channel, networkReceive);
                     }
                 }

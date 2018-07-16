@@ -22,10 +22,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class PlaintextChannelBuilder implements ChannelBuilder {
+
     private static final Logger log = LoggerFactory.getLogger(PlaintextChannelBuilder.class);
+
     private PrincipalBuilder principalBuilder;
+
     private Map<String, ?> configs;
 
+    /**
+     * 实际上就是初始化这些配置
+     */
     public void configure(Map<String, ?> configs) throws KafkaException {
         try {
             this.configs = configs;
@@ -52,5 +58,4 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
     public void close() {
         this.principalBuilder.close();
     }
-
 }

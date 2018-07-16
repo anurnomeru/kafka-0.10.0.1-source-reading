@@ -73,9 +73,11 @@ public class ChannelBuilders {
 
     /**
      * Returns a configured `PrincipalBuilder`.
+     * 返回一个配置过的 'PrincipalBuilder' Principal 相当于用户的概念，与认证相关
      */
     static PrincipalBuilder createPrincipalBuilder(Map<String, ?> configs) {
         // this is a server-only config so it will always be null on the client
+        // 只有服务端需要配置这个principal
         Class<?> principalBuilderClass = (Class<?>) configs.get(SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG);
         PrincipalBuilder principalBuilder;
         if (principalBuilderClass == null)
