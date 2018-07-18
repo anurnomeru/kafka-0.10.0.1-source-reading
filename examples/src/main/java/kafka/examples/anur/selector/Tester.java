@@ -9,6 +9,9 @@ import java.io.FileOutputStream;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.util.ArrayList;
+import java.util.List;
+import kafka.utils.Json;
 
 /**
  * Created by Anur IjuoKaruKas on 7/6/2018
@@ -82,13 +85,6 @@ public class Tester {
         long e = System.currentTimeMillis();
 
         System.out.println(e - sta);
-
-
-        if (permission.has(select)){
-            return;
-        } else {
-            permission.add(select);
-        }
 
         //        long sta = System.currentTimeMillis();
         //        FileInputStream fileInputStream = new FileInputStream("C:\\Users\\Anur\\Desktop\\centos.iso");

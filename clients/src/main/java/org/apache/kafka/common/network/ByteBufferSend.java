@@ -71,7 +71,7 @@ public class ByteBufferSend implements Send {
         // GatheringByteChannel or ScatteringByteChannel.
 
         // 这是一个临时工作区，当发送时，接收数据的接口一直被BlockingChannel使用着。
-        // 一旦BlockingChannel 被移除，我们可以开始发送，接收通过 transportLayer 来工作而不是 GatheringByteChannel 或 ScatteringByteChannel
+        // 一旦BlockingChannel 被移除，我们就可以开始我们的发送操作，接收通过 transportLayer 来工作而不是 GatheringByteChannel 或 ScatteringByteChannel
         if (channel instanceof TransportLayer) {
             pending = ((TransportLayer) channel).hasPendingWrites();
         }

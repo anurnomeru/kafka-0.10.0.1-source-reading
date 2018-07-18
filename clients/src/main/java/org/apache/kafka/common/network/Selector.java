@@ -205,6 +205,14 @@ public class Selector implements Selectable {
      *
      * @throws IllegalStateException if there is already a connection for that id
      * @throws IOException if DNS resolution fails on the hostname or if the broker is down
+     *
+     * 1、创建socket连接
+     * 2、将连接绑定到selector上，并关注 connect事件
+     * 3、创建一个KafkaChannel（nodeId、认证器、tpLayer( selectionKey、socketChannel )、收、发buffer的一个集成类
+     * 4、将kafkaChannel绑定到selectionKey上
+     * 5、把id和kafkaChannel进行绑定，到this.channels上（反向索引）
+     *
+     * 6、如果已经连接好了（非阻塞是立即返回的），则去除其监听 connect的事件，加到immediately里面
      */
     @Override
     public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException {
@@ -250,7 +258,11 @@ public class Selector implements Selectable {
      * Register the nioSelector with an existing channel
      * Use this on server-side, when a connection is accepted by a different thread but processed by the Selector
      * Note that we are not checking if the connection id is valid - since the connection already exists
+     *
+     * 将socketChannel注册到nioSelector上，在服务端，当一个连接被另一个线程accept，但通过Selector来处理。
+     * 注意我们不会去检查这个连接id是否是可用的，如果这个连接已经存在的话
      */
+    // TODO 什么时候会调用它？
     public void register(String id, SocketChannel socketChannel) throws ClosedChannelException {
         SelectionKey key = socketChannel.register(nioSelector, SelectionKey.OP_READ);
         KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize);
@@ -260,6 +272,7 @@ public class Selector implements Selectable {
 
     /**
      * Interrupt the nioSelector if it is blocked waiting to do I/O.
+     * 唤醒Selector
      */
     @Override
     public void wakeup() {
@@ -285,14 +298,19 @@ public class Selector implements Selectable {
 
     /**
      * Queue the given request for sending in the subsequent {@link #poll(long)} calls
+     * 把send放在queue里面，为后面的 poll调用准备
      *
      * @param send The request to send
      */
     public void send(Send send) {
+        // 看看send要发的这个nodeId在不在
         KafkaChannel channel = channelOrFail(send.destination());
         try {
+            // 把数据扔进KafkaChannel中（只能放一个，放多个会报错），并关注write事件
             channel.setSend(send);
         } catch (CancelledKeyException e) {
+
+            // 失败了加一条node_id的失败记录
             this.failedSends.add(send.destination());
             close(channel);
         }
@@ -302,21 +320,35 @@ public class Selector implements Selectable {
      * Do whatever I/O can be done on each connection without blocking. This includes completing connections, completing
      * disconnections, initiating new sends, or making progress on in-progress sends or receives.
      *
+     * 把那些IO中不需要阻塞的事情全做了，包括建立连接，断开连接，初始化新的发送，或者让程序处理正在进行的sends或者receives
+     *
      * When this call is completed the user can check for completed sends, receives, connections or disconnects using
      * {@link #completedSends()}, {@link #completedReceives()}, {@link #connected()}, {@link #disconnected()}. These
      * lists will be cleared at the beginning of each `poll` call and repopulated by the call if there is
      * any completed I/O.
+     *
+     * 当调用完成后，用户可以通过一系列方法检查发送、接收、连接、断开连接是否完成。每次调用poll时，这些列表将会重置，并且重新赋值
      *
      * In the "Plaintext" setting, we are using socketChannel to read & write to the network. But for the "SSL" setting,
      * we encrypt the data before we use socketChannel to write data to the network, and decrypt before we return the responses.
      * This requires additional buffers to be maintained as we are reading from network, since the data on the wire is encrypted
      * we won't be able to read exact no.of bytes as kafka protocol requires. We read as many bytes as we can, up to SSLEngine's
      * application buffer size. This means we might be reading additional bytes than the requested size.
+     *
+     * 在"Plaintext"设置下，我们使用socketChannel来对网络进行读写。但是在"ssl"设置下，在我们向socketChannel写数据之前，对数据进行了加密，
+     * 并且在得到应答之前进行解密。当我们从网络读取数据时，需要维护额外的buffers，因为数据是加密过的，我们不会去读取kafka协议实际需要的字节，
+     * 我们将尽可能读取更多的bytes，直到填满SSLEngine的buffer。
+     *
      * If there is no further data to read from socketChannel selector won't invoke that channel and we've have additional bytes
      * in the buffer. To overcome this issue we added "stagedReceives" map which contains per-channel deque. When we are
      * reading a channel we read as many responses as we can and store them into "stagedReceives" and pop one response during
      * the poll to add the completedReceives. If there are any active channels in the "stagedReceives" we set "timeout" to 0
      * and pop response and add to the completedReceives.
+     *
+     * 如果已经无法从socketChannel读取更多数据了，selector不会去调用那个channel，并且我们将在buffer中持有额外的字节。
+     * 为了解决这个问题，我们添加了一个key为channel，value为deque的"stagedReceives" Map。
+     * 当我们从channel中读取数据时，我们会将其存进"stagedReceives"，然后在poll的过程中pop一个response添加到completedReceives中。
+     * 如果"stagedReceives"有任何活跃的channels，我们会将其超时时间设置为0，并且pop出一个response将其添加到completedReceives里面。
      *
      * @param timeout The amount of time to wait, in milliseconds, which must be non-negative
      *
@@ -332,7 +364,8 @@ public class Selector implements Selectable {
 
         clear();// 将上一次poll方法的结果清理掉
 
-        if (hasStagedReceives() //TODO: ????????
+        // stagedReceives中有【无效？？】或【关注了Read事件】的channel，或者 immediately不是空的，超时时间为0，可以直接nioSelector.selectNow
+        if (hasStagedReceives()
             || !immediatelyConnectedKeys.isEmpty()) {
             timeout = 0;
         }
@@ -345,7 +378,7 @@ public class Selector implements Selectable {
         long endSelect = time.nanoseconds();
         currentTimeNanos = endSelect;
 
-        this.sensors.selectTime.record(endSelect - startSelect, time.milliseconds());// TODO:???????
+        this.sensors.selectTime.record(endSelect - startSelect, time.milliseconds());// TODO:??????? 应该是个统计
 
         if (readyKeys > 0 || !immediatelyConnectedKeys.isEmpty()) {
             pollSelectionKeys(this.nioSelector.selectedKeys(), false);// 处理I/O的核心方法
@@ -376,7 +409,7 @@ public class Selector implements Selectable {
                 /* complete any connections that have finished their handshake (either normally or immediately) */
                 // 完成三次握手的任意连接，无论是可以立即使用的channel，或者普通channel
                 if (isImmediatelyConnected || key.isConnectable()) {
-                    // finishConnect方法会先检测socketChannel是否建立完成，建立后，会取消对OP_CONNECT事件关注，开始关注OP_READ事件
+                    // finishConnect方法会先检测socketChannel是否建立完成，建立后，会取消对OP_CONNECT事件关注，//TODO 并开始关注OP_READ事件
                     if (channel.finishConnect()) {
                         this.connected.add(channel.id());// 将当前channel id 添加到已连接的集合中
                         this.sensors.connectionCreated.record();
@@ -394,8 +427,8 @@ public class Selector implements Selectable {
                 // channel是否已经准备好从连接中读取任何可读数据
                 /* if channel is ready read from any connections that have readable data */
                 if (channel.ready() // 连接的三次握手完成，并且 todo 权限验证通过
-                    && key.isReadable() // key已经准备好
-                    && !hasStagedReceive(channel)) {                                              // todo：他的意思可能是正在这个通道正在读数据
+                    && key.isReadable() // key是否关注了read事件
+                    && !hasStagedReceive(channel)) {// todo 这个通道不能是正在读数据的，因为在读的时候，会把这个channel扔进stagedReceives里面
                     NetworkReceive networkReceive;
 
                     while ((networkReceive = channel.read()) != null) {
@@ -407,7 +440,7 @@ public class Selector implements Selectable {
                 // 如果channel的buffer已经有足够的空间 并且 我们有数据来准备好写sockets
                 if (channel.ready() && key.isWritable()) {
                     Send send = channel.write();
-                    // 这里会将KafkaChannel的send字段发送出去，如果未完成发送，则返回null
+                    // 这里会将KafkaChannel的send字段发送出去，如果未完成发送，或者没发完，则返回null
                     // 否则将返回send
                     if (send != null) {
                         this.completedSends.add(send);// 添加到completedSends集合
@@ -416,7 +449,9 @@ public class Selector implements Selectable {
                 }
 
                 /* cancel any defunct sockets */
+                // 把那些没用的关掉
                 if (!key.isValid()) {
+                    asdfasdfasdfasdfasdf 有空看看这个valid
                     close(channel);
                     this.disconnected.add(channel.id());
                 }
@@ -606,7 +641,7 @@ public class Selector implements Selectable {
 
     /**
      * Check if given channel has a staged receive
-     * 检查这个channel是否是多次接受
+     * 检查这个channel是否在阶段性stagedReceives里
      */
     private boolean hasStagedReceive(KafkaChannel channel) {
         return stagedReceives.containsKey(channel);
@@ -614,6 +649,10 @@ public class Selector implements Selectable {
 
     /**
      * check if stagedReceives have unmuted channel
+     * 判断 stagedReceives 有没有 "取消静音" 的channel
+     *
+     * 比如说在PlainText中， mute意思是：有效，并没有关注Read
+     * 那么unMute 就是 stagedReceives中 有无效的 channel，或者关注了 Read事件的channel
      */
     private boolean hasStagedReceives() {
         for (KafkaChannel channel : this.stagedReceives.keySet()) {
@@ -646,6 +685,8 @@ public class Selector implements Selectable {
             while (iter.hasNext()) {
                 Map.Entry<KafkaChannel, Deque<NetworkReceive>> entry = iter.next();
                 KafkaChannel channel = entry.getKey();
+
+                // 如果channel中有监听了Read事件的
                 if (!channel.isMute()) {
                     Deque<NetworkReceive> deque = entry.getValue();
                     NetworkReceive networkReceive = deque.poll();

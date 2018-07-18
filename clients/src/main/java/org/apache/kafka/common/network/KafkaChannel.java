@@ -27,6 +27,13 @@ import java.security.Principal;
 
 import org.apache.kafka.common.utils.Utils;
 
+/**
+ * 总的来说，就是封装了
+ * nodeId
+ * 认证器
+ * tpLayer( selectionKey、socketChannel )
+ * 收、发buffer的一个集成类
+ */
 public class KafkaChannel {
 
     // 节点id
@@ -196,6 +203,7 @@ public class KafkaChannel {
         return result;
     }
 
+    // 如果send 不能 空，并且发送成功了，返回send，否则返回null
     public Send write() throws IOException {
         Send result = null;
         if (send != null && send(send)) {
@@ -213,7 +221,7 @@ public class KafkaChannel {
     }
 
     /**
-     * 简单来说，就是将Send 里面的 buffer 转移到 TransportLayer(传输层)
+     * 简单来说，就是将Send 里面的 buffer 转移到 TransportLayer(传输层)里的channel
      * Send 实际上就是对 bytebufer 的封装
      */
     private boolean send(Send send) throws IOException {

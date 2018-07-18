@@ -41,9 +41,15 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
         }
     }
 
+    /**
+     * 创建一个ptLayer 里面有selectionKey，有channel
+     * 创建一个认证器，做配置
+     * 把上面的东西连同nodeId一起东西塞进KafkaChannel
+     */
     public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize) throws KafkaException {
         KafkaChannel channel = null;
         try {
+
             PlaintextTransportLayer transportLayer = new PlaintextTransportLayer(key);
             Authenticator authenticator = new DefaultAuthenticator();
             authenticator.configure(transportLayer, this.principalBuilder, this.configs);
