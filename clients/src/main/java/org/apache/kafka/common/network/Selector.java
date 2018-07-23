@@ -438,6 +438,7 @@ public class Selector implements Selectable {
                      * 实际上这里就是分多次去一个channel取数据，直到取完，并将其保存在key：channel  value：new ArrayDeque<NetworkReceive> 中
                      */
                     while ((networkReceive = channel.read()) != null) {
+                        // 将多次接收的数据放进stagedReceives下channel的Deque里面
                         addToStagedReceives(channel, networkReceive);
                     }
                 }
@@ -459,7 +460,7 @@ public class Selector implements Selectable {
                 }
 
                 /* cancel any defunct sockets */
-                // 把那些没用的关掉
+                // 把那些没用的关掉，一般来说 Key.isValid 都是网络io出问题的
                 // isValid: until it is cancelled, its channel is closed, or its selector is closed.
                 if (!key.isValid()) {
                     close(channel);
@@ -496,44 +497,6 @@ public class Selector implements Selectable {
     @Override
     public List<String> connected() {
         return this.connected;
-    }
-
-    /**
-     * 沉默，不再关注READ事件
-     */
-    @Override
-    public void mute(String id) {
-        KafkaChannel channel = channelOrFail(id);
-        mute(channel);
-    }
-
-    private void mute(KafkaChannel channel) {
-        channel.mute();
-    }
-
-    /**
-     * 关注READ事件
-     */
-    @Override
-    public void unmute(String id) {
-        KafkaChannel channel = channelOrFail(id);
-        unmute(channel);
-    }
-
-    private void unmute(KafkaChannel channel) {
-        channel.unmute();
-    }
-
-    @Override
-    public void muteAll() {
-        for (KafkaChannel channel : this.channels.values())
-            mute(channel);
-    }
-
-    @Override
-    public void unmuteAll() {
-        for (KafkaChannel channel : this.channels.values())
-            unmute(channel);
     }
 
     /**
@@ -699,6 +662,8 @@ public class Selector implements Selectable {
     /**
      * checks if there are any staged receives and adds to completedReceives
      * 检查是否有“分次接收”，并将其添加到“接收完毕”
+     *
+     * 从 分次接收中，取出已经收完的 加到 completedReceives
      */
     private void addToCompletedReceives() {
         if (!this.stagedReceives.isEmpty()) {
@@ -708,9 +673,13 @@ public class Selector implements Selectable {
                 Map.Entry<KafkaChannel, Deque<NetworkReceive>> entry = iter.next();
                 KafkaChannel channel = entry.getKey();
 
-                // 如果channel中有监听了Read事件的
+                // 沉默代表没有监听read事件
+
+                // 如果channel中有监听了Read事件的（不沉默的）
                 if (!channel.isMute()) {
                     Deque<NetworkReceive> deque = entry.getValue();
+
+                    // todo 为什么它只拿一个呢？
                     NetworkReceive networkReceive = deque.poll();
                     this.completedReceives.add(networkReceive);
                     this.sensors.recordBytesReceived(channel.id(), networkReceive.payload()
@@ -721,6 +690,46 @@ public class Selector implements Selectable {
                 }
             }
         }
+    }
+
+    // -------------------------- 下面这些方法都是测试时用的
+
+    /**
+     * 沉默，不再关注READ事件
+     */
+    @Override
+    public void mute(String id) {
+        KafkaChannel channel = channelOrFail(id);
+        mute(channel);
+    }
+
+    private void mute(KafkaChannel channel) {
+        channel.mute();
+    }
+
+    /**
+     * 关注READ事件
+     */
+    @Override
+    public void unmute(String id) {
+        KafkaChannel channel = channelOrFail(id);
+        unmute(channel);
+    }
+
+    private void unmute(KafkaChannel channel) {
+        channel.unmute();
+    }
+
+    @Override
+    public void muteAll() {
+        for (KafkaChannel channel : this.channels.values())
+            mute(channel);
+    }
+
+    @Override
+    public void unmuteAll() {
+        for (KafkaChannel channel : this.channels.values())
+            unmute(channel);
     }
 
     private class SelectorMetrics {

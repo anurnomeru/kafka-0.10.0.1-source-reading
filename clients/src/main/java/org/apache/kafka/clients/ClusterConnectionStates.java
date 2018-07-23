@@ -3,9 +3,9 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -17,10 +17,11 @@ import java.util.Map;
 
 /**
  * The state of our connection to each node in the cluster.
- * 
  */
 final class ClusterConnectionStates {
+
     private final long reconnectBackoffMs;
+
     private final Map<String, NodeConnectionState> nodeState;
 
     public ClusterConnectionStates(long reconnectBackoffMs) {
@@ -31,41 +32,55 @@ final class ClusterConnectionStates {
     /**
      * Return true iff we can currently initiate a new connection. This will be the case if we are not
      * connected and haven't been connected for at least the minimum reconnection backoff period.
+     *
+     * iff => if and only if
+     *
+     * 如果刚才初始化了一个连接，会返回true，这将有一种情况，如果我们没有连接并且以前一次也没有连接过？？？TODO 翻译的不对。
+     *
      * @param id The connection id to check
      * @param now The current time in MS
+     *
      * @return true if we can initiate a new connection
      */
     public boolean canConnect(String id, long now) {
         NodeConnectionState state = nodeState.get(id);
-        if (state == null)
+        if (state == null) {
             return true;
-        else
+        } else {
             return state.state == ConnectionState.DISCONNECTED && now - state.lastConnectAttemptMs >= this.reconnectBackoffMs;
+        }
     }
 
     /**
      * Return true if we are disconnected from the given node and can't re-establish a connection yet
+     *
+     * 如果我们已经与这个节点断开连接，并且不能再重建立连接了，返回true
+     *
      * @param id The connection to check
      * @param now The current time in ms
      */
     public boolean isBlackedOut(String id, long now) {
         NodeConnectionState state = nodeState.get(id);
-        if (state == null)
+        if (state == null) {
             return false;
-        else
+        } else {
             return state.state == ConnectionState.DISCONNECTED && now - state.lastConnectAttemptMs < this.reconnectBackoffMs;
+        }
     }
 
     /**
      * Returns the number of milliseconds to wait, based on the connection state, before attempting to send data. When
      * disconnected, this respects the reconnect backoff time. When connecting or connected, this handles slow/stalled
      * connections.
+     *
      * @param id The connection to check
      * @param now The current time in ms
      */
     public long connectionDelay(String id, long now) {
         NodeConnectionState state = nodeState.get(id);
-        if (state == null) return 0;
+        if (state == null) {
+            return 0;
+        }
         long timeWaited = now - state.lastConnectAttemptMs;
         if (state.state == ConnectionState.DISCONNECTED) {
             return Math.max(this.reconnectBackoffMs - timeWaited, 0);
@@ -78,6 +93,7 @@ final class ClusterConnectionStates {
 
     /**
      * Enter the connecting state for the given connection.
+     *
      * @param id The id of the connection
      * @param now The current time.
      */
@@ -87,6 +103,7 @@ final class ClusterConnectionStates {
 
     /**
      * Return true iff a specific connection is connected
+     *
      * @param id The id of the connection to check
      */
     public boolean isConnected(String id) {
@@ -96,6 +113,7 @@ final class ClusterConnectionStates {
 
     /**
      * Enter the connected state for the given connection
+     *
      * @param id The connection identifier
      */
     public void connected(String id) {
@@ -105,6 +123,7 @@ final class ClusterConnectionStates {
 
     /**
      * Enter the disconnected state for the given node
+     *
      * @param id The connection we have disconnected
      * @param now The current time
      */
@@ -124,33 +143,38 @@ final class ClusterConnectionStates {
     public void remove(String id) {
         nodeState.remove(id);
     }
-    
+
     /**
      * Get the state of a given connection
+     *
      * @param id The id of the connection
+     *
      * @return The state of our connection
      */
     public ConnectionState connectionState(String id) {
         return nodeState(id).state;
     }
-    
+
     /**
      * Get the state of a given node
+     *
      * @param id The connection to fetch the state for
      */
     private NodeConnectionState nodeState(String id) {
         NodeConnectionState state = this.nodeState.get(id);
-        if (state == null)
+        if (state == null) {
             throw new IllegalStateException("No entry found for connection " + id);
+        }
         return state;
     }
-    
+
     /**
      * The state of our connection to a node
      */
     private static class NodeConnectionState {
 
         ConnectionState state;
+
         long lastConnectAttemptMs;
 
         public NodeConnectionState(ConnectionState state, long lastConnectAttempt) {

@@ -43,6 +43,8 @@ import java.util.Random;
 /**
  * A network client for asynchronous request/response network i/o. This is an internal class used to implement the
  * user-facing producer and consumer clients.
+ *
+ * 异步请求/接收网络id的Client。这是一个内部类，用来实现面向用户的Producer和Consumer客户端
  * <p>
  * This class is not thread-safe!
  */
@@ -52,6 +54,7 @@ public class NetworkClient implements KafkaClient {
     private static final Logger log = LoggerFactory.getLogger(NetworkClient.class);
 
     /* the selector used to perform network i/o */
+    // 操作网络io的 KafkaSelector
     private final Selectable selector;
 
     private final MetadataUpdater metadataUpdater;
@@ -144,6 +147,9 @@ public class NetworkClient implements KafkaClient {
 
     /**
      * Begin connecting to the given node, return true if we are already connected and ready to send to that node.
+     *
+     * 对给予的节点进行连接操作，如果已经连接了，返回true
+     * 否则返回false，并开始连接
      *
      * @param node The node to check
      * @param now The current timestamp
@@ -272,6 +278,7 @@ public class NetworkClient implements KafkaClient {
     public List<ClientResponse> poll(long timeout, long now) {
         long metadataTimeout = metadataUpdater.maybeUpdate(now);
         try {
+            // KafkaSelector Poll
             this.selector.poll(Utils.min(timeout, metadataTimeout, requestTimeoutMs));
         } catch (IOException e) {
             log.error("Unexpected error during I/O", e);
@@ -280,7 +287,11 @@ public class NetworkClient implements KafkaClient {
         // process completed actions
         long updatedNow = this.time.milliseconds();
         List<ClientResponse> responses = new ArrayList<>();
+
+        // 处理所有已完成的发送请求，特别注意的是，如果不要求发送应答（ack)，就认为发送成功了
         handleCompletedSends(responses, updatedNow);
+
+
         handleCompletedReceives(responses, updatedNow);
         handleDisconnections(responses, updatedNow);
         handleConnections();
@@ -445,13 +456,18 @@ public class NetworkClient implements KafkaClient {
     /**
      * Handle any completed request send. In particular if no response is expected consider the request complete.
      *
+     * 处理所有已完成的发送请求，特别注意的是，如果不要求发送应答（ack，就认为发送成功了）
+     *
      * @param responses The list of responses to update
      * @param now The current time
      */
     private void handleCompletedSends(List<ClientResponse> responses, long now) {
         // if no response is expected then when the send is completed, return it
+        // 这个 completedSends 是能保证消息一定发送出去了的
         for (Send send : this.selector.completedSends()) {
             ClientRequest request = this.inFlightRequests.lastSent(send.destination());
+
+            // 判断一下这个request需不需要ack，如果不需要ack，添加到返回列表中
             if (!request.expectResponse()) {
                 this.inFlightRequests.completeLastSent(send.destination());
                 responses.add(new ClientResponse(request, now, false, null));
