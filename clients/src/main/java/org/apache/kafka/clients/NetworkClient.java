@@ -288,16 +288,22 @@ public class NetworkClient implements KafkaClient {
         long updatedNow = this.time.milliseconds();
         List<ClientResponse> responses = new ArrayList<>();
 
-        // 处理所有已完成的发送请求，特别注意的是，如果不要求发送应答（ack)，就认为发送成功了
+        // 处理所有已完成的发送请求，特别注意的是，如果不要求发送应答（ack)，就认为发送成功了，body为null
         handleCompletedSends(responses, updatedNow);
 
-
+        // 感觉是拿到所有已经接收到的数据，然后扔到组装到ClientResponse里面，body为接收到的数据的消息体
         handleCompletedReceives(responses, updatedNow);
+
+        // 处理断开的连接
         handleDisconnections(responses, updatedNow);
+
+        // 主要是改一下连接状态
         handleConnections();
+
+        // 超时处理，其实和断开很像，但是它还需要手动去断开一下
         handleTimedOutRequests(responses, updatedNow);
 
-        // invoke callbacks
+        // invoke callbacks 调用一下callback 的 hook
         for (ClientResponse response : responses) {
             if (response.request()
                         .hasCallback()) {
@@ -404,10 +410,14 @@ public class NetworkClient implements KafkaClient {
     }
 
     public static Struct parseResponse(ByteBuffer responseBuffer, RequestHeader requestHeader) {
+        // 读取请求头
         ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer);
         // Always expect the response version id to be the same as the request version id
+        // 期望 Response 的版本号 和 request 版本号相同
         short apiKey = requestHeader.apiKey();
         short apiVer = requestHeader.apiVersion();
+
+        // TODO ??? 获取出请求体
         Struct responseBody = ProtoUtils.responseSchema(apiKey, apiVer)
                                         .read(responseBuffer);
         correlate(requestHeader, responseHeader);
@@ -416,6 +426,8 @@ public class NetworkClient implements KafkaClient {
 
     /**
      * Post process disconnection of a node
+     *
+     * 1、标记connectionStates相应节点为断开连接
      *
      * @param responses The list of responses to update
      * @param nodeId Id of the node to be disconnected
@@ -483,8 +495,12 @@ public class NetworkClient implements KafkaClient {
      */
     private void handleCompletedReceives(List<ClientResponse> responses, long now) {
         for (NetworkReceive receive : this.selector.completedReceives()) {
+
+            // todo ???
             String source = receive.source();
             ClientRequest req = inFlightRequests.completeNext(source);
+
+            // Receives,payload 是拿到 接收到的buffer的引用
             Struct body = parseResponse(receive.payload(), req.request()
                                                               .header());
             if (!metadataUpdater.maybeHandleCompletedReceive(req, now, body)) {
@@ -504,6 +520,7 @@ public class NetworkClient implements KafkaClient {
             log.debug("Node {} disconnected.", node);
             processDisconnection(responses, node, now);
         }
+        // 断开连接可能是某个broker挂了，所以刷新一下元数据
         // we got a disconnect so we should probably refresh our metadata and see if that broker is dead
         if (this.selector.disconnected()
                          .size() > 0) {

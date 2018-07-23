@@ -51,6 +51,8 @@ interface MetadataUpdater {
     /**
      * If `request` is a metadata request, handles it and return `true`. Otherwise, returns `false`.
      *
+     * 如果请求时一个请求元数据的请求，会处理它，并返回true，否则返回false
+     *
      * This provides a mechanism for the `MetadataUpdater` implementation to use the NetworkClient instance for its own
      * requests with special handling for disconnections of such requests.
      */
