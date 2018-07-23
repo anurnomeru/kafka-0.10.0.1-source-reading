@@ -16,12 +16,14 @@ import java.io.Closeable;
 import java.util.List;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.network.NotTheadSafe;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.RequestHeader;
 
 /**
  * The interface for {@link NetworkClient}
  */
+@NotTheadSafe
 public interface KafkaClient extends Closeable {
 
     /**

@@ -15,6 +15,7 @@ package org.apache.kafka.clients;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.network.NetworkReceive;
+import org.apache.kafka.common.network.NotTheadSafe;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -45,6 +46,7 @@ import java.util.Random;
  * <p>
  * This class is not thread-safe!
  */
+@NotTheadSafe
 public class NetworkClient implements KafkaClient {
 
     private static final Logger log = LoggerFactory.getLogger(NetworkClient.class);

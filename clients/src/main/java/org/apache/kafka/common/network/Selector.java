@@ -139,6 +139,9 @@ public class Selector implements Selectable {
     /** 记录各个连接的使用情况，据此关闭空闲时间超过 connectionsMaxIdleNanos 的链接 */
     private final Map<String, Long> lruConnections;
 
+    /**
+     * 超过这个时间没操作就关掉
+     */
     private final long connectionsMaxIdleNanos;
 
     private final int maxReceiveSize;
@@ -220,7 +223,7 @@ public class Selector implements Selectable {
             throw new IllegalStateException("There is already a connection for id " + id);
         }
 
-        SocketChannel socketChannel = SocketChannel.open();// 创建一个socketChannel，并且在调用 socketChannel.connect(address)，后打开连接
+        SocketChannel socketChannel = SocketChannel.open();// 创建一个socketChannel，并且在后续调用 socketChannel.connect(address)，时打开连接
         socketChannel.configureBlocking(false);// 非阻塞模式
         Socket socket = socketChannel.socket();
         socket.setKeepAlive(true);// 设置为长连接
@@ -431,17 +434,24 @@ public class Selector implements Selectable {
                     && !hasStagedReceive(channel)) {// todo 这个通道不能是正在读数据的，因为在读的时候，会把这个channel扔进stagedReceives里面
                     NetworkReceive networkReceive;
 
+                    /**
+                     * 实际上这里就是分多次去一个channel取数据，直到取完，并将其保存在key：channel  value：new ArrayDeque<NetworkReceive> 中
+                     */
                     while ((networkReceive = channel.read()) != null) {
                         addToStagedReceives(channel, networkReceive);
                     }
                 }
 
+                /**
+                 * 发送时其实也有一次没发送完的情况，每发送完的话，就不会出现在completedSends里面
+                 */
                 /* if channel is ready write to any sockets that have space in their buffer and for which we have data */
-                // 如果channel的buffer已经有足够的空间 并且 我们有数据来准备好写sockets
+                // 如果channel已经ready 并且 我们有数据来准备好写sockets
                 if (channel.ready() && key.isWritable()) {
                     Send send = channel.write();
-                    // 这里会将KafkaChannel的send字段发送出去，如果未完成发送，或者没发完，则返回null
-                    // 否则将返回send
+                    // 这里会将KafkaChannel的send字段发送出去，
+                    // 如果未完成发送，或者没发完，则返回null
+                    // 发送成功则返回send对象
                     if (send != null) {
                         this.completedSends.add(send);// 添加到completedSends集合
                         this.sensors.recordBytesSent(channel.id(), send.size());
@@ -450,8 +460,8 @@ public class Selector implements Selectable {
 
                 /* cancel any defunct sockets */
                 // 把那些没用的关掉
+                // isValid: until it is cancelled, its channel is closed, or its selector is closed.
                 if (!key.isValid()) {
-                    asdfasdfasdfasdfasdf 有空看看这个valid
                     close(channel);
                     this.disconnected.add(channel.id());
                 }
@@ -488,6 +498,9 @@ public class Selector implements Selectable {
         return this.connected;
     }
 
+    /**
+     * 沉默，不再关注READ事件
+     */
     @Override
     public void mute(String id) {
         KafkaChannel channel = channelOrFail(id);
@@ -498,6 +511,9 @@ public class Selector implements Selectable {
         channel.mute();
     }
 
+    /**
+     * 关注READ事件
+     */
     @Override
     public void unmute(String id) {
         KafkaChannel channel = channelOrFail(id);
@@ -520,6 +536,9 @@ public class Selector implements Selectable {
             unmute(channel);
     }
 
+    /**
+     * 简单的来说，就是根据时间戳去关闭没怎么用的链接，只会关一个
+     */
     private void maybeCloseOldestConnection() {
         if (currentTimeNanos > nextIdleCloseCheckTime) {
             if (lruConnections.isEmpty()) {
@@ -545,6 +564,8 @@ public class Selector implements Selectable {
     }
 
     /**
+     * clear poll带来的一些result
+     *
      * Clear the results from the prior poll
      */
     private void clear() {
@@ -649,7 +670,7 @@ public class Selector implements Selectable {
 
     /**
      * check if stagedReceives have unmuted channel
-     * 判断 stagedReceives 有没有 "取消静音" 的channel
+     * 判断 stagedReceives 有没有 "取消静音" 的channel，也就是说有没有，正在关注 READ 事件的channel
      *
      * 比如说在PlainText中， mute意思是：有效，并没有关注Read
      * 那么unMute 就是 stagedReceives中 有无效的 channel，或者关注了 Read事件的channel
@@ -677,6 +698,7 @@ public class Selector implements Selectable {
 
     /**
      * checks if there are any staged receives and adds to completedReceives
+     * 检查是否有“分次接收”，并将其添加到“接收完毕”
      */
     private void addToCompletedReceives() {
         if (!this.stagedReceives.isEmpty()) {

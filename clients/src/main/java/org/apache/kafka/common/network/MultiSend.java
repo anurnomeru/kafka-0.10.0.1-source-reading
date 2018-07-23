@@ -6,7 +6,7 @@
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -32,12 +32,19 @@ import java.util.List;
 public class MultiSend implements Send {
 
     private static final Logger log = LoggerFactory.getLogger(MultiSend.class);
+
     private String dest;
+
     private long totalWritten = 0;
+
     private List<Send> sends;
+
     private Iterator<Send> sendsIterator;
+
     private Send current;
+
     private boolean doneSends = false;
+
     private long size = 0;
 
     public MultiSend(String dest, List<Send> sends) {
@@ -45,7 +52,7 @@ public class MultiSend implements Send {
         this.sends = sends;
         this.sendsIterator = sends.iterator();
         nextSendOrDone();
-        for (Send send: sends)
+        for (Send send : sends)
             this.size += send.size();
     }
 
@@ -59,11 +66,16 @@ public class MultiSend implements Send {
         return dest;
     }
 
+    /**
+     * 是否 doSends，
+     * 总写入数是否等于 size
+     */
     @Override
     public boolean completed() {
         if (doneSends) {
-            if (totalWritten != size)
+            if (totalWritten != size) {
                 log.error("mismatch in sending bytes over socket; expected: " + size + " actual: " + totalWritten);
+            }
             return true;
         } else {
             return false;
@@ -72,8 +84,9 @@ public class MultiSend implements Send {
 
     @Override
     public long writeTo(GatheringByteChannel channel) throws IOException {
-        if (completed())
+        if (completed()) {
             throw new KafkaException("This operation cannot be completed on a complete request.");
+        }
 
         int totalWrittenPerCall = 0;
         boolean sendComplete = false;
@@ -82,19 +95,22 @@ public class MultiSend implements Send {
             totalWritten += written;
             totalWrittenPerCall += written;
             sendComplete = current.completed();
-            if (sendComplete)
+            if (sendComplete) {
                 nextSendOrDone();
+            }
         } while (!completed() && sendComplete);
-        if (log.isTraceEnabled())
-            log.trace("Bytes written as part of multisend call : " + totalWrittenPerCall +  "Total bytes written so far : " + totalWritten + "Expected bytes to write : " + size);
+        if (log.isTraceEnabled()) {
+            log.trace("Bytes written as part of multisend call : " + totalWrittenPerCall + "Total bytes written so far : " + totalWritten + "Expected bytes to write : " + size);
+        }
         return totalWrittenPerCall;
     }
 
     // update current if there's a next Send, mark sends as done if there isn't
     private void nextSendOrDone() {
-        if (sendsIterator.hasNext())
+        if (sendsIterator.hasNext()) {
             current = sendsIterator.next();
-        else
+        } else {
             doneSends = true;
+        }
     }
 }
