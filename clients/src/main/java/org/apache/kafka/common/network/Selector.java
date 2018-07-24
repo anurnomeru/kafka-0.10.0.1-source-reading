@@ -310,6 +310,7 @@ public class Selector implements Selectable {
         KafkaChannel channel = channelOrFail(send.destination());
         try {
             // 把数据扔进KafkaChannel中（只能放一个，放多个会报错），并关注write事件
+            // 报错: Attempt to begin a send operation with prior send operation still in progress
             channel.setSend(send);
         } catch (CancelledKeyException e) {
 

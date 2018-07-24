@@ -296,7 +296,10 @@ public class NetworkClient implements KafkaClient {
         List<ClientResponse> responses = new ArrayList<>();
 
         // 处理所有已完成的发送请求，特别注意的是，如果不要求发送应答（ack)，就认为发送成功了，body为null
-        // todo completedSends列表与InFlightRequests中对应队列的最后一个应该是一致的!! 没想清楚
+        // todo completedSends列表与InFlightRequests中对应队列的最后一个应该是一致的!!
+        // 因为 this.inFlightRequests.add(request);
+        //        selector.send(request.request());
+        // Selector 的操作是操作Channel，而一个channel里只能放一个send，放多个会报错
         handleCompletedSends(responses, updatedNow);
 
         // 感觉是拿到所有已经接收到的数据，然后扔到组装到ClientResponse里面，body为接收到的数据的消息体

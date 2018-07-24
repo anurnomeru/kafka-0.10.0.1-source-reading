@@ -210,7 +210,6 @@ public class Sender implements Runnable {
             this.maxRequestSize,
             now);
 
-
         if (guaranteeMessageOrder) {
             // Mute all the partitions drained
             for (List<RecordBatch> batchList : batches.values()) {
@@ -222,7 +221,6 @@ public class Sender implements Runnable {
         /** 6、处理RecordAccumulator中超时的消息*/
         List<RecordBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout, now);
         // update sensors
-
 
         for (RecordBatch expiredBatch : expiredBatches)
             this.sensors.recordErrors(expiredBatch.topicPartition.topic(), expiredBatch.recordCount);
@@ -279,10 +277,13 @@ public class Sender implements Runnable {
                                     .request()
                                     .header()
                                     .correlationId();
+
+        // 请求断开了连接
         if (response.wasDisconnected()) {
             log.trace("Cancelled request {} due to node {} being disconnected", response, response.request()
                                                                                                   .request()
                                                                                                   .destination());
+
             for (RecordBatch batch : batches.values())
                 completeBatch(batch, Errors.NETWORK_EXCEPTION, -1L, Record.NO_TIMESTAMP, correlationId, now);
         } else {
@@ -328,6 +329,7 @@ public class Sender implements Runnable {
      * @param now The current POSIX time stamp in milliseconds
      */
     private void completeBatch(RecordBatch batch, Errors error, long baseOffset, long timestamp, long correlationId, long now) {
+        // 可以重试
         if (error != Errors.NONE && canRetry(batch, error)) {
             // retry
             log.warn("Got error produce response with correlation id {} on topic-partition {}, retrying ({} attempts left). Error: {}",
@@ -335,7 +337,9 @@ public class Sender implements Runnable {
                 batch.topicPartition,
                 this.retries - batch.attempts - 1,
                 error);
+            // batch 重新入队
             this.accumulator.reenqueue(batch, now);
+            // 记录一下
             this.sensors.recordRetries(batch.topicPartition.topic(), batch.recordCount);
         } else {
             RuntimeException exception;
@@ -344,8 +348,11 @@ public class Sender implements Runnable {
             } else {
                 exception = error.exception();
             }
+
             // tell the user the result of their request
+            // todo ????
             batch.done(baseOffset, timestamp, exception);
+            // 释放空间
             this.accumulator.deallocate(batch);
             if (error != Errors.NONE) {
                 this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
