@@ -62,6 +62,7 @@ public class NetworkClient implements KafkaClient {
     private final Random randOffset;
 
     /* the state of each node's connection */
+    // 管理所有连接状态
     private final ClusterConnectionStates connectionStates;
 
     /* the set of requests currently being sent or awaiting a response */
@@ -252,14 +253,20 @@ public class NetworkClient implements KafkaClient {
     public void send(ClientRequest request, long now) {
         String nodeId = request.request()
                                .destination();
+
+        // 三重判断 connectionStates 可连接，channel 验证通过
         if (!canSendRequest(nodeId)) {
             throw new IllegalStateException("Attempt to send a request to node " + nodeId + " which is not ready.");
         }
         doSend(request, now);
     }
 
+    /**
+     * Selector 把 request 扔进去
+     */
     private void doSend(ClientRequest request, long now) {
         request.setSendTimeMs(now);
+
         this.inFlightRequests.add(request);
         selector.send(request.request());
     }
@@ -289,6 +296,7 @@ public class NetworkClient implements KafkaClient {
         List<ClientResponse> responses = new ArrayList<>();
 
         // 处理所有已完成的发送请求，特别注意的是，如果不要求发送应答（ack)，就认为发送成功了，body为null
+        // todo completedSends列表与InFlightRequests中对应队列的最后一个应该是一致的!! 没想清楚
         handleCompletedSends(responses, updatedNow);
 
         // 感觉是拿到所有已经接收到的数据，然后扔到组装到ClientResponse里面，body为接收到的数据的消息体
@@ -550,6 +558,16 @@ public class NetworkClient implements KafkaClient {
 
     /**
      * Initiate a connection to the given node
+     *
+     * Selector.connect :
+     *
+     * 1、创建socket连接
+     * 2、将连接绑定到selector上，并关注 connect事件
+     * 3、创建一个KafkaChannel（nodeId、认证器、tpLayer( selectionKey、socketChannel )、收、发buffer的一个集成类
+     * 4、将kafkaChannel绑定到selectionKey上
+     * 5、把id和kafkaChannel进行绑定，到this.channels上（反向索引）
+     *
+     * 6、如果已经连接好了（非阻塞是立即返回的），则去除其监听 connect的事件，加到immediately里面
      */
     private void initiateConnect(Node node, long now) {
         String nodeConnectionId = node.idString();
