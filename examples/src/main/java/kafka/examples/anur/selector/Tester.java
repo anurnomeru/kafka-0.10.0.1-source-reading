@@ -11,6 +11,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import kafka.utils.Json;
 
 /**
@@ -60,31 +61,32 @@ public class Tester {
 
     public static void main(String[] args) throws Exception {
 
-        long sta = System.currentTimeMillis();
-
-        //        RandomAccessFile aFile = new RandomAccessFile("C:\\Users\\Anur\\Desktop\\centos.iso", "rw");
-        RandomAccessFile bFile = new RandomAccessFile("C:\\Users\\Anur\\Desktop\\test.txt", "rw");
-
-        //        FileChannel fileChannela = aFile.getChannel();
-        FileChannel fileChannelb = bFile.getChannel();
-        long size = fileChannelb.size();
-
-        ByteBuffer byteBuffer = ByteBuffer.allocate(200);
-        byteBuffer.put("这是一个测试".getBytes("utf-8"));
-
-        int count = 0;
-        byteBuffer.flip();
-        //        fileChannelb.write(byteBuffer, size);
-        //        byteBuffer.rewind();
-        while (byteBuffer.hasRemaining()) {
-            System.out.println(count++);
-            fileChannelb.write(byteBuffer, size);
-        }
-        //        fileChannelb.transferFrom(fileChannela, 0, size);
         //
-        long e = System.currentTimeMillis();
-
-        System.out.println(e - sta);
+        //        long sta = System.currentTimeMillis();
+        //
+        //        //        RandomAccessFile aFile = new RandomAccessFile("C:\\Users\\Anur\\Desktop\\centos.iso", "rw");
+        //        RandomAccessFile bFile = new RandomAccessFile("C:\\Users\\Anur\\Desktop\\test.txt", "rw");
+        //
+        //        //        FileChannel fileChannela = aFile.getChannel();
+        //        FileChannel fileChannelb = bFile.getChannel();
+        //        long size = fileChannelb.size();
+        //
+        //        ByteBuffer byteBuffer = ByteBuffer.allocate(200);
+        //        byteBuffer.put("这是一个测试".getBytes("utf-8"));
+        //
+        //        int count = 0;
+        //        byteBuffer.flip();
+        //        //        fileChannelb.write(byteBuffer, size);
+        //        //        byteBuffer.rewind();
+        //        while (byteBuffer.hasRemaining()) {
+        //            System.out.println(count++);
+        //            fileChannelb.write(byteBuffer, size);
+        //        }
+        //        //        fileChannelb.transferFrom(fileChannela, 0, size);
+        //        //
+        //        long e = System.currentTimeMillis();
+        //
+        //        System.out.println(e - sta);
 
         //        long sta = System.currentTimeMillis();
         //        FileInputStream fileInputStream = new FileInputStream("C:\\Users\\Anur\\Desktop\\centos.iso");
