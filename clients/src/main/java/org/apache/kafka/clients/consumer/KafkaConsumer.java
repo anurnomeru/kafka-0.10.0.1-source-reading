@@ -88,13 +88,16 @@ import java.util.regex.Pattern;
  * are actually two notions of position relevant to the user of the consumer.
  *
  * kafka为每一个record的分区维持着一个offset数值。这个offset承担着一个record关联的那个分区的唯一标识的角色，同时表示
- * consumer 在分区中的位置。这代表着，一个consumer拥有 5position并且已经笑飞了 0 - 4的offset，***/然后下一个receiver offset为5的消息，
+ * consumer 在分区中的位置。这代表着，一个consumer拥有 5position并且已经笑飞了 0 - 4的offset，然后下一个receiver offset为5的消息，
  * 这里和position有关的实际上存在两个概念。
  *
  * <p>
  * The {@link #position(TopicPartition) position} of the consumer gives the offset of the next record that will be given
  * out. It will be one larger than the highest offset the consumer has seen in that partition. It automatically advances
  * every time the consumer receives data calls {@link #poll(long)} and receives messages.
+ *
+ * consumer 的【position】包含了下一个即将发出的消息的offset，这将会比consumer在那个partition接收到的最大的offset更大，
+ * 它每一次都会在consumer调用poll接收数据时自动增加。
  * <p>
  * The {@link #commitSync() committed position} is the last offset that has been saved securely. Should the
  * process fail and restart, this is the offset that it will recover to. The consumer can either automatically commit
@@ -103,8 +106,16 @@ import java.util.regex.Pattern;
  * or fatal error has happened during the commit process, or {@link #commitAsync(OffsetCommitCallback) commitAsync} which is non-blocking
  * and will trigger {@link OffsetCommitCallback} upon either successfully committed or fatally failed.
  * <p>
+ *
+ * commitSync 这个方法提交最后一个安全保存的offset。在进程出错或者重启时，会恢复到这个offset。consumer也可以周期性地提交offsets，或者可以
+ * 通过commitsync这个方法选择手动控制提交位置，这个方法会阻塞直到offsets成功提交，或者提交进程发生了重大的错误，或者调用不阻塞的commitAsync
+ * ，commitAsync会触发OffsetCommitCallback，直到提交成功或者发生了失败。
+ *
  * This distinction gives the consumer control over when a record is considered consumed. It is discussed in further
  * detail below.
+ *
+ * 这个区别给予了consumer得以控制一个消息是不是被消费了，接下来会详细讲解
+ *
  *
  * <h3>Consumer Groups and Topic Subscriptions</h3>
  *
@@ -112,6 +123,10 @@ import java.util.regex.Pattern;
  * processing records. These processes can either be running on the same machine or, as is more likely, they can be
  * distributed over many machines to provide scalability and fault tolerance for processing.
  * <p>
+ *
+ * kafka 使用了consumer group的概念来允许一组程序来区分消费和处理消息。这些程序可以运行在同一个机器上，或者更可能的，他们可以
+ * 分布在很多机器上来提供可拓展和故障容错。
+ *
  * Each Kafka consumer is able to configure a consumer group that it belongs to, and can dynamically set the list
  * of topics it wants to subscribe to through one of the {@link #subscribe(Collection, ConsumerRebalanceListener) subscribe}
  * APIs. Kafka will deliver each message in the subscribed topics to one process in each consumer group.
@@ -119,6 +134,12 @@ import java.util.regex.Pattern;
  * assigned to exactly one consumer in the group. So if there is a topic with four partitions, and a consumer group with two
  * processes, each process would consume from two partitions.
  * <p>
+ *
+ * 每个kafka的consumer都会配置一个归属的consumer group，并且可以通过【subscribe】方法，动态的设置它想要订阅的topic的列表。
+ * kafka将会发送每一个消息到每一个订阅了该topic的consumer group中。上述功能通过均衡consumer group中所有成员中分区来实现，
+ * 所以每个partition被实际分配到group中的一个consumer。所以如果这里有一个拥有4分区的topic，并且有一个拥有2程序的consumer group
+ * 每个程序会消费两个partition。
+ *
  * Membership in a consumer group is maintained dynamically: if a process fails, the partitions assigned to it will
  * be reassigned to other consumers in the same group. Similarly, if a new consumer joins the group, partitions will be moved
  * from existing consumers to the new one. This is known as <i>rebalancing</i> the group and is discussed in more
@@ -126,6 +147,14 @@ import java.util.regex.Pattern;
  * to one of the subscribed topics: the group automatically detects the new partitions and rebalances the group so
  * that every new partition is assigned to one of the members.
  * <p>
+ *
+ * consumer group 中的关系是动态维持的：如果一个程序挂了，partition将会被重新被指定同个consumer group中另一个consumers。
+ * 相似的，如果一个新的consumer加入了这个族，partitions 将会从已经存在的consumer移动到新的consumer上。这与 ！rebalancing！
+ * consumer group 有关，这将在下面failuredetection进行详细讨论。
+ * 注意，一个同样的处理会在新的partitions被添加到一个被订阅的主题中时被使用：
+ * 注意，在一个新的partitions在被添加到一个被订阅的主题中时也会采用相同的处理方法：
+ * group 会自动发现新的partitions然后rebalance 这个group，所以每一个新的partition都会被分配给其中一个member。
+ *
  * Conceptually you can think of a consumer group as being a single logical subscriber that happens to be made up of
  * multiple processes. As a multi-subscriber system, Kafka naturally supports having any number of consumer groups for a
  * given topic without duplicating data (additional consumers are actually quite cheap).
