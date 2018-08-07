@@ -137,7 +137,7 @@ import java.util.regex.Pattern;
  *
  * 每个kafka的consumer都会配置一个归属的consumer group，并且可以通过【subscribe】方法，动态的设置它想要订阅的topic的列表。
  * kafka将会发送每一个消息到每一个订阅了该topic的consumer group中。上述功能通过均衡consumer group中所有成员中分区来实现，
- * 所以每个partition被实际分配到group中的一个consumer。所以如果这里有一个拥有4分区的topic，并且有一个拥有2程序的consumer group
+ * 所以每个partition只会被分配到group中的一个consumer。所以如果这里有一个拥有4分区的topic，并且有一个拥有2程序的consumer group
  * 每个程序会消费两个partition。
  *
  * Membership in a consumer group is maintained dynamically: if a process fails, the partitions assigned to it will
@@ -151,25 +151,36 @@ import java.util.regex.Pattern;
  * consumer group 中的关系是动态维持的：如果一个程序挂了，partition将会被重新被指定同个consumer group中另一个consumers。
  * 相似的，如果一个新的consumer加入了这个族，partitions 将会从已经存在的consumer移动到新的consumer上。这与 ！rebalancing！
  * consumer group 有关，这将在下面failuredetection进行详细讨论。
- * 注意，一个同样的处理会在新的partitions被添加到一个被订阅的主题中时被使用：
  * 注意，在一个新的partitions在被添加到一个被订阅的主题中时也会采用相同的处理方法：
- * group 会自动发现新的partitions然后rebalance 这个group，所以每一个新的partition都会被分配给其中一个member。
+ * partition group 会自动发现新的partitions然后rebalance 这个group，所以每一个新的partition都会被分配给其中一个member。
  *
  * Conceptually you can think of a consumer group as being a single logical subscriber that happens to be made up of
  * multiple processes. As a multi-subscriber system, Kafka naturally supports having any number of consumer groups for a
  * given topic without duplicating data (additional consumers are actually quite cheap).
  * <p>
+ *
+ * 在概念上，你可以认为一个consumer group就是一个单独逻辑上的订阅者，它由多个程序组成。作为一个复合的订阅系统，kafka的topic自然支持
+ * 任意数量的consumer group，而不会产生重复的数据(添加consumer是一个轻量级的操作)。
+ *
  * This is a slight generalization of the functionality that is common in messaging systems. To get semantics similar to
  * a queue in a traditional messaging system all processes would be part of a single consumer group and hence record
  * delivery would be balanced over the group like with a queue. Unlike a traditional messaging system, though, you can
  * have multiple such groups. To get semantics similar to pub-sub in a traditional messaging system each process would
  * have its own consumer group, so each process would subscribe to all the records published to the topic.
  * <p>
+ *
+ * 这是对消息系统中常见功能的简单概括。为了获得传统mq中的queue语义，所有的程序都是consumer group中的一部分，所以消息的传递
+ * 会通过group来均衡，就像队列一样。和传统的mq不同的是，你可以拥有多个这样的组。为了获得传统mq中pub-sub相似的语义，每个程序会拥有属于
+ * 自己的consumer group，所以每个程序会订阅topic发布的所有消息。
+ *
  * In addition, when group reassignment happens automatically, consumers can be notified through {@link ConsumerRebalanceListener},
  * which allows them to finish necessary application-level logic such as state cleanup, manual offset
  * commits (note that offsets are always committed for a given consumer group), etc.
  * See <a href="#rebalancecallback">Storing Offsets Outside Kafka</a> for more details
  * <p>
+ *
+ *
+ *
  * It is also possible for the consumer to <a href="#manualassignment">manually assign</a> specific partitions
  * (similar to the older "simple" consumer) using {@link #assign(Collection)}. In this case, dynamic partition
  * assignment and consumer group coordination will be disabled.
@@ -544,30 +555,38 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     private static final long NO_CURRENT_THREAD = -1L;
 
+    // clientId 生成器
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
 
     private static final String JMX_PREFIX = "kafka.consumer";
 
+    // consumer的唯一标识
     private final String clientId;
 
+    // consumer和GroupCoordinator的门面
     private final ConsumerCoordinator coordinator;
 
     private final Deserializer<K> keyDeserializer;
 
     private final Deserializer<V> valueDeserializer;
 
+    // 从服务端获取消息
     private final Fetcher<K, V> fetcher;
 
+    // 拦截器（发或收）
     private final ConsumerInterceptors<K, V> interceptors;
 
     private final Time time;
 
+    // 维护与kafka服务端的网络通讯
     private final ConsumerNetworkClient client;
 
     private final Metrics metrics;
 
+    // 维护了消费者的消费状态
     private final SubscriptionState subscriptions;
 
+    // 记录了元信息
     private final Metadata metadata;
 
     private final long retryBackoffMs;
@@ -576,10 +595,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     private boolean closed = false;
 
+    // 当前使用kafkaConsumer的线程id，它实现了一个轻量级锁，仅检测是否有多线程并发操作KafkaConsumer，并非真正的锁
     // currentThread holds the threadId of the current thread accessing KafkaConsumer
     // and is used to prevent multi-threaded access
     private final AtomicLong currentThread = new AtomicLong(NO_CURRENT_THREAD);
 
+    // 重入次数，它实现了一个轻量级锁，仅检测是否有多线程并发操作KafkaConsumer，并非真正的锁
     // refcount is used to allow reentrant access by the thread who has acquired currentThread
     private final AtomicInteger refcount = new AtomicInteger(0);
 

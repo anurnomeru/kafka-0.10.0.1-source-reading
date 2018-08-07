@@ -104,6 +104,26 @@ public class KafkaChannel {
         }
     }
 
+    /**
+     * 接收数据，将数据保存在 NetworkReceive
+     */
+    public NetworkReceive read() throws IOException {
+        NetworkReceive result = null;
+
+        if (receive == null) {
+            receive = new NetworkReceive(maxReceiveSize, id);
+        }
+
+        receive(receive);
+        if (receive.complete()) {
+            receive.payload()
+                   .rewind();
+            result = receive;
+            receive = null;
+        }
+        return result;
+    }
+
     public void disconnect() {
         transportLayer.disconnect();
     }
@@ -181,26 +201,6 @@ public class KafkaChannel {
         // 关注 OP_WRITE 事件
         // key.interestOps(key.interestOps() | ops);
         this.transportLayer.addInterestOps(SelectionKey.OP_WRITE);
-    }
-
-    /**
-     * 接收数据，将数据保存在 NetworkReceive
-     */
-    public NetworkReceive read() throws IOException {
-        NetworkReceive result = null;
-
-        if (receive == null) {
-            receive = new NetworkReceive(maxReceiveSize, id);
-        }
-
-        receive(receive);
-        if (receive.complete()) {
-            receive.payload()
-                   .rewind();
-            result = receive;
-            receive = null;
-        }
-        return result;
     }
 
     // 如果send 不能 空，并且发送成功了，返回send，否则返回null

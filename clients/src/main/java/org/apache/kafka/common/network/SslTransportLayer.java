@@ -350,9 +350,11 @@ public class SslTransportLayer implements TransportLayer {
             //we are complete if we have delivered the last package
             handshakeComplete = !netWriteBuffer.hasRemaining();
             //remove OP_WRITE if we are complete, otherwise we still have data to write
+            // 如果握手没有完成，关注write事件
             if (!handshakeComplete)
                 key.interestOps(key.interestOps() | SelectionKey.OP_WRITE);
             else
+                // 否则移除关注
                 key.interestOps(key.interestOps() & ~SelectionKey.OP_WRITE);
 
             log.trace("SSLHandshake FINISHED channelId {}, appReadBuffer pos {}, netReadBuffer pos {}, netWriteBuffer pos {} ",

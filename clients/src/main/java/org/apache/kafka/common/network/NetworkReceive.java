@@ -88,13 +88,20 @@ public class NetworkReceive implements Receive {
     @Deprecated
     public long readFromReadableChannel(ReadableByteChannel channel) throws IOException {
         int read = 0;
+
+        // 是否还有剩余空间
         if (size.hasRemaining()) {
             int bytesRead = channel.read(size);
             if (bytesRead < 0) {
                 throw new EOFException();
             }
             read += bytesRead;
+
+            // 判断是否已经没有剩余空间了
             if (!size.hasRemaining()) {
+
+                // 类似于flip，但是flip会将limit设置为当前position，rewind不会，也就是说会读的时候到底，而不会只读到写时的position
+                // 但是在这里，其实没什么区别，可能作者觉得rewind更快一点
                 size.rewind();
                 int receiveSize = size.getInt();
                 if (receiveSize < 0) {
