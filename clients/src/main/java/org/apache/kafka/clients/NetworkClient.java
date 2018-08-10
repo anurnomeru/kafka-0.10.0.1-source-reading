@@ -246,6 +246,7 @@ public class NetworkClient implements KafkaClient {
     /**
      * Queue up the given request for sending. Requests can only be sent out to ready nodes.
      *
+     *
      * @param request The request
      * @param now The current timestamp
      */
@@ -254,7 +255,7 @@ public class NetworkClient implements KafkaClient {
         String nodeId = request.request()
                                .destination();
 
-        // 三重判断 connectionStates 可连接，channel 验证通过
+        // 三重判断 connectionStates 可连接，channel 验证通过，inFlight可发送
         if (!canSendRequest(nodeId)) {
             throw new IllegalStateException("Attempt to send a request to node " + nodeId + " which is not ready.");
         }
