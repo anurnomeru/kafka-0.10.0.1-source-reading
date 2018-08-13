@@ -247,23 +247,30 @@ public class ConsumerNetworkClient implements Closeable {
      */
     private void poll(long timeout, long now, boolean executeDelayedTasks) {
         // send all the requests we can send now
-        // 循环处理unsent中的元素，实际上还是调用了networkClient 的 kSelector的kChannel来send（预发送）
+        // 1、循环处理unsent中的元素，实际上还是调用了networkClient 的 kSelector的kChannel来send（预发送）
         trySend(now);
 
         // ensure we don't poll any longer than the deadline for
         // the next scheduled task
-        // 确保我们没有poll到过期的
+        // 2、计算超时时长，确保下次定时任务执行，我们不会poll任何超过deadline的
         timeout = Math.min(timeout, delayedTasks.nextTimeout(now));
+
+        // 3、调用NetworkClient的poll，将send字段发送出去
+        // 4、调用maybeTriggerWakeup，查看是否有其他线程来中断请求
         clientPoll(timeout, now);
         now = time.milliseconds();
 
         // handle any disconnects by failing the active requests. note that disconnects must
         // be checked immediately following poll since any subsequent call to client.ready()
         // will reset the disconnect status
+        // 5、检测有没有断开的node，如果断开了，会调用其callback方法，清除的对应的ClientRequest对象
+        // 让有效请求失效来处理断开的连接。注意，掉线检查必须在poll时进行，因为随后对 client.ready() todo 的调用将会重置连接状态
         checkDisconnects(now);
 
+        // 6、是否执行超时的定时任务 todo  看到这里
         // execute scheduled tasks
         if (executeDelayedTasks) {
+
             delayedTasks.poll(now);
         }
 
