@@ -271,14 +271,16 @@ public class ConsumerNetworkClient implements Closeable {
         // execute scheduled tasks
         if (executeDelayedTasks) {
 
-            delayedTasks.poll(now);
+            delayedTasks.poll(now); // ??? 待看
         }
 
         // try again to send requests since buffer space may have been
         // cleared or a connect finished in the poll
+        // 尝试将预发送，因为在poll操作中，buffer可能被清空或者，建立新的连接
         trySend(now);
 
         // fail requests that couldn't be sent if they have expired
+        // 因过期而不能发送的失败请求
         failExpiredRequests(now);
     }
 

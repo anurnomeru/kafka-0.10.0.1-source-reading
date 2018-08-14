@@ -23,6 +23,9 @@ import java.util.List;
  * (and variants) to finish a request future. Use {@link #isDone()} to check if the future is complete, and
  * {@link #succeeded()} to check if the request completed successfully. Typical usage might look like this:
  *
+ * consumerNetworkClient 的异步请求结果， 使用其poll(long) 方法（及其变体）来完成一个。。。。使用 isDone 来检查future是否已经完成（可以接收请求）
+ * 使用succeeded 来检查请求是否已经完全成功。典型的使用看如下：
+ *
  * <pre>
  *     RequestFuture<ClientResponse> future = client.send(api, request);
  *     client.poll(future);
@@ -40,13 +43,18 @@ import java.util.List;
 public class RequestFuture<T> {
 
     private boolean isDone = false;
-    private T value;
-    private RuntimeException exception;
-    private List<RequestFutureListener<T>> listeners = new ArrayList<>();
 
+    private T value;
+
+    private RuntimeException exception;
+
+    private List<RequestFutureListener<T>> listeners = new ArrayList<>();
 
     /**
      * Check whether the response is ready to be handled
+     *
+     * 接收是否已经准备好处理
+     *
      * @return true if the response is ready, false otherwise
      */
     public boolean isDone() {
@@ -55,6 +63,9 @@ public class RequestFuture<T> {
 
     /**
      * Get the value corresponding to this request (only available if the request succeeded)
+     *
+     * 获取此请求对应的值(仅当请求成功)
+     *
      * @return the value if it exists or null
      */
     public T value() {
@@ -63,6 +74,9 @@ public class RequestFuture<T> {
 
     /**
      * Check if the request succeeded;
+     *
+     * 检查请求是否成功
+     *
      * @return true if the request completed and was successful
      */
     public boolean succeeded() {
@@ -71,6 +85,9 @@ public class RequestFuture<T> {
 
     /**
      * Check if the request failed.
+     *
+     * 检查请求是否失败
+     *
      * @return true if the request completed with a failure
      */
     public boolean failed() {
@@ -80,6 +97,9 @@ public class RequestFuture<T> {
     /**
      * Check if the request is retriable (convenience method for checking if
      * the exception is an instance of {@link RetriableException}.
+     *
+     * 检查请求是否是可以重试的
+     *
      * @return true if it is retriable, false otherwise
      */
     public boolean isRetriable() {
@@ -88,6 +108,9 @@ public class RequestFuture<T> {
 
     /**
      * Get the exception from a failed result (only available if the request failed)
+     *
+     * 获取请求失败的异常（仅失败时）
+     *
      * @return The exception if it exists or null
      */
     public RuntimeException exception() {
@@ -97,31 +120,42 @@ public class RequestFuture<T> {
     /**
      * Complete the request successfully. After this call, {@link #succeeded()} will return true
      * and the value can be obtained through {@link #value()}.
+     *
+     * 请求成功完成。调用完这个方法后， succeeded会返回true，并且可以通过 value() 方法来获得结果
+     *
      * @param value corresponding value (or null if there is none)
      */
     public void complete(T value) {
-        if (isDone)
+        if (isDone) {
             throw new IllegalStateException("Invalid attempt to complete a request future which is already complete");
+        }
         this.value = value;
         this.isDone = true;
+
+        // 调用 listener的onSuccess
         fireSuccess();
     }
 
     /**
      * Raise an exception. The request will be marked as failed, and the caller can either
      * handle the exception or throw it.
+     *
      * @param e corresponding exception to be passed to caller
      */
     public void raise(RuntimeException e) {
-        if (isDone)
+        if (isDone) {
             throw new IllegalStateException("Invalid attempt to complete a request future which is already complete");
+        }
         this.exception = e;
         this.isDone = true;
+
+        // 调用 listener的onFail
         fireFailure();
     }
 
     /**
      * Raise an error. The request will be marked as failed.
+     *
      * @param error corresponding error to be passed to caller
      */
     public void raise(Errors error) {
@@ -140,14 +174,14 @@ public class RequestFuture<T> {
 
     /**
      * Add a listener which will be notified when the future completes
-     * @param listener
      */
     public void addListener(RequestFutureListener<T> listener) {
         if (isDone) {
-            if (exception != null)
+            if (exception != null) {
                 listener.onFailure(exception);
-            else
+            } else {
                 listener.onSuccess(value);
+            }
         } else {
             this.listeners.add(listener);
         }
@@ -155,13 +189,18 @@ public class RequestFuture<T> {
 
     /**
      * Convert from a request future of one type to another type
+     *
+     * todo ???????????
+     *
      * @param adapter The adapter which does the conversion
      * @param <S> The type of the future adapted to
+     *
      * @return The new future
      */
     public <S> RequestFuture<S> compose(final RequestFutureAdapter<T, S> adapter) {
         final RequestFuture<S> adapted = new RequestFuture<S>();
         addListener(new RequestFutureListener<T>() {
+
             @Override
             public void onSuccess(T value) {
                 adapter.onSuccess(value, adapted);
@@ -172,11 +211,16 @@ public class RequestFuture<T> {
                 adapter.onFailure(e, adapted);
             }
         });
+
         return adapted;
     }
 
+    /**
+     * 其实就是添加监听器，在future 成功和失败时调用
+     */
     public void chain(final RequestFuture<T> future) {
         addListener(new RequestFutureListener<T>() {
+
             @Override
             public void onSuccess(T value) {
                 future.complete(value);
@@ -216,5 +260,4 @@ public class RequestFuture<T> {
     public static <T> RequestFuture<T> staleMetadata() {
         return failure(new StaleMetadataException());
     }
-
 }
