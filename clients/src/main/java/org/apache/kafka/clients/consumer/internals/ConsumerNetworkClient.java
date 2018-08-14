@@ -12,6 +12,14 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.io.Closeable;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
@@ -28,15 +36,6 @@ import org.apache.kafka.common.requests.RequestSend;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.io.Closeable;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Higher level consumer access to the network layer with basic support for futures and
@@ -87,6 +86,8 @@ public class ConsumerNetworkClient implements Closeable {
      * Schedule a new task to be executed at the given time. This is "best-effort" scheduling and
      * should only be used for coarse synchronization.
      *
+     *
+     *
      * @param task The task to be scheduled
      * @param at The time it should run
      */
@@ -129,6 +130,9 @@ public class ConsumerNetworkClient implements Closeable {
         return future;
     }
 
+    /**
+     * 为某个node添加一个request请求
+     */
     private void put(Node node, ClientRequest request) {
         List<ClientRequest> nodeUnsent = unsent.get(node);
         if (nodeUnsent == null) {
@@ -138,12 +142,17 @@ public class ConsumerNetworkClient implements Closeable {
         nodeUnsent.add(request);
     }
 
+    /**
+     * 找寻负载最低的node
+     * @return
+     */
     public Node leastLoadedNode() {
         return client.leastLoadedNode(time.milliseconds());
     }
 
     /**
      * Block until the metadata has been refreshed.
+     * 阻塞知道metadata更新
      */
     public void awaitMetadataUpdate() {
         int version = this.metadata.requestUpdate();
@@ -298,6 +307,7 @@ public class ConsumerNetworkClient implements Closeable {
 
     /**
      * Block until all pending requests from the given node have finished.
+     * 阻塞，直到给予的node下的所有的 pending request 完成
      *
      * @param node The node to await requests from
      */
