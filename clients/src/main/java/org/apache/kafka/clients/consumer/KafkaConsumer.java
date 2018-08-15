@@ -583,7 +583,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     private final Metrics metrics;
 
-    // 维护了消费者的消费状态
+    // 维护了消费者的消费状态，用于追踪TopicPartition与offset的关系
     private final SubscriptionState subscriptions;
 
     // 记录了元信息

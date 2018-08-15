@@ -142,6 +142,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return metadataList;
     }
 
+    /** 使用AUTO_PATTERN模式， */
     private void addMetadataListener() {
         this.metadata.addListener(new Metadata.Listener() {
             @Override
