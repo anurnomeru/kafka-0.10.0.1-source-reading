@@ -30,6 +30,9 @@ import java.util.regex.Pattern;
  * is "assigned" either directly with {@link #assignFromUser(Collection)} (manual assignment)
  * or with {@link #assignFromSubscribed(Collection)} (automatic assignment from subscription).
  *
+ * 这是一个为consumer追踪topics、partitions、offsets的类。一个分区可由{@link #assignFromUser(Collection)}直接“分配”（手动分配）
+ * 或者使用{@link #assignFromSubscribed(Collection)} 自动分配
+ *
  * Once assigned, the partition is not considered "fetchable" until its initial position has
  * been set with {@link #seek(TopicPartition, long)}. Fetchable partitions track a fetch
  * position which is used to set the offset of the next fetch, and a consumed position
@@ -37,6 +40,12 @@ import java.util.regex.Pattern;
  * from a partition through {@link #pause(TopicPartition)} without affecting the fetched/consumed
  * offsets. The partition will remain unfetchable until the {@link #resume(TopicPartition)} is
  * used. You can also query the pause state independently with {@link #isPaused(TopicPartition)}.
+ *
+ * 一次分配，一个partition将不被视为“fetchable”直到它的初始position被{@link #seek(TopicPartition, long)}设置。
+ * Fetchable的 partitions 追踪一个 fetch position， 用来设置下次fetch时【传入的offset】，
+ * 被消费的position就是最后一个返回给user的offset。你可以通过{@link #pause(TopicPartition)} 延迟从一个partition获取，
+ * 并且它不会影响到 fetched/consumed的offsets。partition 将会保留 unfetchable 直到使用{@link #resume(TopicPartition)}
+ * 你也可以使用 {@link #isPaused(TopicPartition)}单独查询暂停状态
  *
  * Note that pause state as well as fetch/consumed positions are not preserved when partition
  * assignment is changed whether directly by the user or through a group rebalance.
@@ -95,6 +104,7 @@ public class SubscriptionState {
     private boolean needsFetchCommittedOffsets;
 
     /* Default offset reset strategy */
+
     /** 默认的offset重置策略 */
     private final OffsetResetStrategy defaultResetStrategy;
 
@@ -150,6 +160,7 @@ public class SubscriptionState {
      * 这里将needsPartitionAssignment设置为true是因为消费者topic发生了变化，所以需要进行分区分配
      */
     public void changeSubscription(Collection<String> topicsToSubscribe) {
+        // 如果订阅的topic有变化
         if (!this.subscription.equals(new HashSet<>(topicsToSubscribe))) {
             this.subscription.clear();
             this.subscription.addAll(topicsToSubscribe);
@@ -157,6 +168,7 @@ public class SubscriptionState {
             this.needsPartitionAssignment = true;
 
             // Remove any assigned partitions which are no longer subscribed to
+            // 移除不再订阅的任何不再分配的分区
             for (Iterator<TopicPartition> it = assignment.keySet()
                                                          .iterator(); it.hasNext(); ) {
                 TopicPartition tp = it.next();

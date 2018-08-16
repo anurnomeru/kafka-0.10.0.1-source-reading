@@ -564,6 +564,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final String clientId;
 
     // consumer和GroupCoordinator的门面
+    // 通过这个来实现与服务端Group Coordinator的交互
     private final ConsumerCoordinator coordinator;
 
     private final Deserializer<K> keyDeserializer;

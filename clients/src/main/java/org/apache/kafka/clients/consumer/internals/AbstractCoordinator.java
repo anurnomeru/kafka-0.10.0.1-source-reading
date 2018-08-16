@@ -62,53 +62,77 @@ import java.util.concurrent.TimeUnit;
  * From a high level, Kafka's group management protocol consists of the following sequence of actions:
  *
  * <ol>
- *     <li>Group Registration: Group members register with the coordinator providing their own metadata
- *         (such as the set of topics they are interested in).</li>
- *     <li>Group/Leader Selection: The coordinator select the members of the group and chooses one member
- *         as the leader.</li>
- *     <li>State Assignment: The leader collects the metadata from all the members of the group and
- *         assigns state.</li>
- *     <li>Group Stabilization: Each member receives the state assigned by the leader and begins
- *         processing.</li>
+ * <li>Group Registration: Group members register with the coordinator providing their own metadata
+ * (such as the set of topics they are interested in).</li>
+ * <li>Group/Leader Selection: The coordinator select the members of the group and chooses one member
+ * as the leader.</li>
+ * <li>State Assignment: The leader collects the metadata from all the members of the group and
+ * assigns state.</li>
+ * <li>Group Stabilization: Each member receives the state assigned by the leader and begins
+ * processing.</li>
  * </ol>
  *
  * To leverage this protocol, an implementation must define the format of metadata provided by each
  * member for group registration in {@link #metadata()} and the format of the state assignment provided
  * by the leader in {@link #performAssignment(String, String, Map)} and becomes available to members in
  * {@link #onJoinComplete(int, String, String, ByteBuffer)}.
- *
  */
 public abstract class AbstractCoordinator implements Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(AbstractCoordinator.class);
 
+    // 心跳任务的辅助类，其中记录了两次发送心跳消息的间隔，最近发送心跳的时间，最后受到心跳响应的时间
+    // 过期时间，心跳任务充值时间，同时还提供了计算下次发送心跳的时间，检测是否过期的方法
     private final Heartbeat heartbeat;
+
+    /** 是一个定时任务，负责定时发送心跳请求和心跳相应，会被添加到 {@link ConsumerNetworkClient#delayedTasks} */
     private final HeartbeatTask heartbeatTask;
+
     private final int sessionTimeoutMs;
+
     private final GroupCoordinatorMetrics sensors;
+
+    /** 当前消费者所属的消费族id */
     protected final String groupId;
+
+    /** ConsumerNetworkClient对象，负责网络通信和执行定时任务 */
     protected final ConsumerNetworkClient client;
+
     protected final Time time;
+
     protected final long retryBackoffMs;
 
+    /** 标记是否需要执行发送JoinGroupRequest */
     private boolean needsJoinPrepare = true;
+
+    /** 此字段是否需要重新发送JoinGroupRequest请求的条件之一 */
     private boolean rejoinNeeded = true;
+
+    /** 记录服务端GroupCoordinator所在的Node节点 */
     protected Node coordinator;
+
+    /** 服务端GroupCoordinator返回的分配给消费者的唯一Id */
     protected String memberId;
+
     protected String protocol;
+
+    /**
+     * GroupCoordinator返回的年代信息，用来区分两次Rebalance操作，由于网络延迟等问题，在执行Rebalance操作时
+     * 可能收到上次Rebalance过程的请求，为了避免这种干扰，每次Rebalance操作都会递增generation的值
+     */
     protected int generation;
 
     /**
      * Initialize the coordination manager.
      */
     public AbstractCoordinator(ConsumerNetworkClient client,
-                               String groupId,
-                               int sessionTimeoutMs,
-                               int heartbeatIntervalMs,
-                               Metrics metrics,
-                               String metricGrpPrefix,
-                               Time time,
-                               long retryBackoffMs) {
+        String groupId,
+        int sessionTimeoutMs,
+        int heartbeatIntervalMs,
+        Metrics metrics,
+        String metricGrpPrefix,
+        Time time,
+        long retryBackoffMs) {
         this.client = client;
         this.time = time;
         this.generation = OffsetCommitRequest.DEFAULT_GENERATION_ID;
@@ -124,6 +148,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
     /**
      * Unique identifier for the class of protocols implements (e.g. "consumer" or "connect").
+     *
      * @return Non-null protocol type name
      */
     protected abstract String protocolType();
@@ -135,6 +160,7 @@ public abstract class AbstractCoordinator implements Closeable {
      * preference into account when selecting the generation protocol (generally more preferred
      * protocols will be selected as long as all members support them and there is no disagreement
      * on the preference).
+     *
      * @return Non-empty map of supported protocols and metadata
      */
     protected abstract List<ProtocolMetadata> metadata();
@@ -142,6 +168,7 @@ public abstract class AbstractCoordinator implements Closeable {
     /**
      * Invoked prior to each group join or rejoin. This is typically used to perform any
      * cleanup from the previous generation (such as committing offsets for the consumer)
+     *
      * @param generation The previous generation or -1 if there was none
      * @param memberId The identifier of this member in the previous group or "" if there was none
      */
@@ -150,25 +177,28 @@ public abstract class AbstractCoordinator implements Closeable {
     /**
      * Perform assignment for the group. This is used by the leader to push state to all the members
      * of the group (e.g. to push partition assignments in the case of the new consumer)
+     *
      * @param leaderId The id of the leader (which is this member)
      * @param allMemberMetadata Metadata from all members of the group
+     *
      * @return A map from each member to their state assignment
      */
     protected abstract Map<String, ByteBuffer> performAssignment(String leaderId,
-                                                                 String protocol,
-                                                                 Map<String, ByteBuffer> allMemberMetadata);
+        String protocol,
+        Map<String, ByteBuffer> allMemberMetadata);
 
     /**
      * Invoked when a group member has successfully joined a group.
+     *
      * @param generation The generation that was joined
      * @param memberId The identifier for the local member in the group
      * @param protocol The protocol selected by the coordinator
      * @param memberAssignment The assignment propagated from the group leader
      */
     protected abstract void onJoinComplete(int generation,
-                                           String memberId,
-                                           String protocol,
-                                           ByteBuffer memberAssignment);
+        String memberId,
+        String protocol,
+        ByteBuffer memberAssignment);
 
     /**
      * Block until the coordinator for this group is known and is ready to receive requests.
@@ -179,22 +209,23 @@ public abstract class AbstractCoordinator implements Closeable {
             client.poll(future);
 
             if (future.failed()) {
-                if (future.isRetriable())
+                if (future.isRetriable()) {
                     client.awaitMetadataUpdate();
-                else
+                } else {
                     throw future.exception();
+                }
             } else if (coordinator != null && client.connectionFailed(coordinator)) {
                 // we found the coordinator, but the connection has failed, so mark
                 // it dead and backoff before retrying discovery
                 coordinatorDead();
                 time.sleep(retryBackoffMs);
             }
-
         }
     }
 
     /**
      * Check whether the group should be rejoined (e.g. if metadata changes)
+     *
      * @return true if it should, false otherwise
      */
     protected boolean needRejoin() {
@@ -205,8 +236,9 @@ public abstract class AbstractCoordinator implements Closeable {
      * Ensure that the group is active (i.e. joined and synced)
      */
     public void ensureActiveGroup() {
-        if (!needRejoin())
+        if (!needRejoin()) {
             return;
+        }
 
         if (needsJoinPrepare) {
             onJoinPrepare(generation, memberId);
@@ -225,6 +257,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
             RequestFuture<ByteBuffer> future = sendJoinGroupRequest();
             future.addListener(new RequestFutureListener<ByteBuffer>() {
+
                 @Override
                 public void onSuccess(ByteBuffer value) {
                     // handle join completion in the callback so that the callback will be invoked
@@ -245,11 +278,12 @@ public abstract class AbstractCoordinator implements Closeable {
             if (future.failed()) {
                 RuntimeException exception = future.exception();
                 if (exception instanceof UnknownMemberIdException ||
-                        exception instanceof RebalanceInProgressException ||
-                        exception instanceof IllegalGenerationException)
+                    exception instanceof RebalanceInProgressException ||
+                    exception instanceof IllegalGenerationException) {
                     continue;
-                else if (!future.isRetriable())
+                } else if (!future.isRetriable()) {
                     throw exception;
+                }
                 time.sleep(retryBackoffMs);
             }
         }
@@ -265,8 +299,9 @@ public abstract class AbstractCoordinator implements Closeable {
             heartbeat.resetSessionTimeout(now);
             client.unschedule(this);
 
-            if (!requestInFlight)
+            if (!requestInFlight) {
                 client.schedule(this, now);
+            }
         }
 
         @Override
@@ -293,6 +328,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
                 RequestFuture<Void> future = sendHeartbeatRequest();
                 future.addListener(new RequestFutureListener<Void>() {
+
                     @Override
                     public void onSuccess(Void value) {
                         requestInFlight = false;
@@ -316,26 +352,27 @@ public abstract class AbstractCoordinator implements Closeable {
      * Join the group and return the assignment for the next generation. This function handles both
      * JoinGroup and SyncGroup, delegating to {@link #performAssignment(String, String, Map)} if
      * elected leader by the coordinator.
+     *
      * @return A request future which wraps the assignment returned from the group leader
      */
     private RequestFuture<ByteBuffer> sendJoinGroupRequest() {
-        if (coordinatorUnknown())
+        if (coordinatorUnknown()) {
             return RequestFuture.coordinatorNotAvailable();
+        }
 
         // send a join group request to the coordinator
         log.info("(Re-)joining group {}", groupId);
         JoinGroupRequest request = new JoinGroupRequest(
-                groupId,
-                this.sessionTimeoutMs,
-                this.memberId,
-                protocolType(),
-                metadata());
+            groupId,
+            this.sessionTimeoutMs,
+            this.memberId,
+            protocolType(),
+            metadata());
 
         log.debug("Sending JoinGroup ({}) to coordinator {}", request, this.coordinator);
         return client.send(coordinator, ApiKeys.JOIN_GROUP, request)
-                .compose(new JoinGroupResponseHandler());
+                     .compose(new JoinGroupResponseHandler());
     }
-
 
     private class JoinGroupResponseHandler extends CoordinatorResponseHandler<JoinGroupResponse, ByteBuffer> {
 
@@ -351,6 +388,8 @@ public abstract class AbstractCoordinator implements Closeable {
                 log.debug("Received successful join group response for group {}: {}", groupId, joinResponse.toStruct());
                 AbstractCoordinator.this.memberId = joinResponse.memberId();
                 AbstractCoordinator.this.generation = joinResponse.generationId();
+
+                // 正常收到JoinGroupResponse的相应，将rejoin设置为false
                 AbstractCoordinator.this.rejoinNeeded = false;
                 AbstractCoordinator.this.protocol = joinResponse.groupProtocol();
                 sensors.joinLatency.record(response.requestLatencyMs());
@@ -361,7 +400,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 }
             } else if (error == Errors.GROUP_LOAD_IN_PROGRESS) {
                 log.debug("Attempt to join group {} rejected since coordinator {} is loading the group.", groupId,
-                        coordinator);
+                    coordinator);
                 // backoff and retry
                 future.raise(error);
             } else if (error == Errors.UNKNOWN_MEMBER_ID) {
@@ -370,14 +409,14 @@ public abstract class AbstractCoordinator implements Closeable {
                 log.debug("Attempt to join group {} failed due to unknown member id.", groupId);
                 future.raise(Errors.UNKNOWN_MEMBER_ID);
             } else if (error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE
-                    || error == Errors.NOT_COORDINATOR_FOR_GROUP) {
+                || error == Errors.NOT_COORDINATOR_FOR_GROUP) {
                 // re-discover the coordinator and retry with backoff
                 coordinatorDead();
                 log.debug("Attempt to join group {} failed due to obsolete coordinator information: {}", groupId, error.message());
                 future.raise(error);
             } else if (error == Errors.INCONSISTENT_GROUP_PROTOCOL
-                    || error == Errors.INVALID_SESSION_TIMEOUT
-                    || error == Errors.INVALID_GROUP_ID) {
+                || error == Errors.INVALID_SESSION_TIMEOUT
+                || error == Errors.INVALID_GROUP_ID) {
                 // log the error and re-throw the exception
                 log.error("Attempt to join group {} failed due to fatal error: {}", groupId, error.message());
                 future.raise(error);
@@ -393,7 +432,7 @@ public abstract class AbstractCoordinator implements Closeable {
     private RequestFuture<ByteBuffer> onJoinFollower() {
         // send follower's sync group with an empty assignment
         SyncGroupRequest request = new SyncGroupRequest(groupId, generation,
-                memberId, Collections.<String, ByteBuffer>emptyMap());
+            memberId, Collections.<String, ByteBuffer>emptyMap());
         log.debug("Sending follower SyncGroup for group {} to coordinator {}: {}", groupId, this.coordinator, request);
         return sendSyncGroupRequest(request);
     }
@@ -402,7 +441,7 @@ public abstract class AbstractCoordinator implements Closeable {
         try {
             // perform the leader synchronization and send back the assignment for the group
             Map<String, ByteBuffer> groupAssignment = performAssignment(joinResponse.leaderId(), joinResponse.groupProtocol(),
-                    joinResponse.members());
+                joinResponse.members());
 
             SyncGroupRequest request = new SyncGroupRequest(groupId, generation, memberId, groupAssignment);
             log.debug("Sending leader SyncGroup for group {} to coordinator {}: {}", groupId, this.coordinator, request);
@@ -413,10 +452,11 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     private RequestFuture<ByteBuffer> sendSyncGroupRequest(SyncGroupRequest request) {
-        if (coordinatorUnknown())
+        if (coordinatorUnknown()) {
             return RequestFuture.coordinatorNotAvailable();
+        }
         return client.send(coordinator, ApiKeys.SYNC_GROUP, request)
-                .compose(new SyncGroupResponseHandler());
+                     .compose(new SyncGroupResponseHandler());
     }
 
     private class SyncGroupResponseHandler extends CoordinatorResponseHandler<SyncGroupResponse, ByteBuffer> {
@@ -428,13 +468,14 @@ public abstract class AbstractCoordinator implements Closeable {
 
         @Override
         public void handle(SyncGroupResponse syncResponse,
-                           RequestFuture<ByteBuffer> future) {
+            RequestFuture<ByteBuffer> future) {
             Errors error = Errors.forCode(syncResponse.errorCode());
             if (error == Errors.NONE) {
                 log.info("Successfully joined group {} with generation {}", groupId, generation);
                 sensors.syncLatency.record(response.requestLatencyMs());
                 future.complete(syncResponse.memberAssignment());
             } else {
+                // 表示需要重新join
                 AbstractCoordinator.this.rejoinNeeded = true;
                 if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                     future.raise(new GroupAuthorizationException(groupId));
@@ -442,12 +483,12 @@ public abstract class AbstractCoordinator implements Closeable {
                     log.debug("SyncGroup for group {} failed due to coordinator rebalance", groupId);
                     future.raise(error);
                 } else if (error == Errors.UNKNOWN_MEMBER_ID
-                        || error == Errors.ILLEGAL_GENERATION) {
+                    || error == Errors.ILLEGAL_GENERATION) {
                     log.debug("SyncGroup for group {} failed due to {}", groupId, error);
                     AbstractCoordinator.this.memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
                     future.raise(error);
                 } else if (error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE
-                        || error == Errors.NOT_COORDINATOR_FOR_GROUP) {
+                    || error == Errors.NOT_COORDINATOR_FOR_GROUP) {
                     log.debug("SyncGroup for group {} failed due to {}", groupId, error);
                     coordinatorDead();
                     future.raise(error);
@@ -461,6 +502,7 @@ public abstract class AbstractCoordinator implements Closeable {
     /**
      * Discover the current coordinator for the group. Sends a GroupMetadata request to
      * one of the brokers. The returned future should be polled to get the result of the request.
+     *
      * @return A request future which indicates the completion of the metadata request
      */
     private RequestFuture<Void> sendGroupCoordinatorRequest() {
@@ -476,12 +518,13 @@ public abstract class AbstractCoordinator implements Closeable {
             log.debug("Sending coordinator request for group {} to broker {}", groupId, node);
             GroupCoordinatorRequest metadataRequest = new GroupCoordinatorRequest(this.groupId);
             return client.send(node, ApiKeys.GROUP_COORDINATOR, metadataRequest)
-                    .compose(new RequestFutureAdapter<ClientResponse, Void>() {
-                        @Override
-                        public void onSuccess(ClientResponse response, RequestFuture<Void> future) {
-                            handleGroupMetadataResponse(response, future);
-                        }
-                    });
+                         .compose(new RequestFutureAdapter<ClientResponse, Void>() {
+
+                             @Override
+                             public void onSuccess(ClientResponse response, RequestFuture<Void> future) {
+                                 handleGroupMetadataResponse(response, future);
+                             }
+                         });
         }
     }
 
@@ -498,17 +541,21 @@ public abstract class AbstractCoordinator implements Closeable {
             // TODO: this needs to be better handled in KAFKA-1935
             Errors error = Errors.forCode(groupCoordinatorResponse.errorCode());
             if (error == Errors.NONE) {
-                this.coordinator = new Node(Integer.MAX_VALUE - groupCoordinatorResponse.node().id(),
-                        groupCoordinatorResponse.node().host(),
-                        groupCoordinatorResponse.node().port());
+                this.coordinator = new Node(Integer.MAX_VALUE - groupCoordinatorResponse.node()
+                                                                                        .id(),
+                    groupCoordinatorResponse.node()
+                                            .host(),
+                    groupCoordinatorResponse.node()
+                                            .port());
 
                 log.info("Discovered coordinator {} for group {}.", coordinator, groupId);
 
                 client.tryConnect(coordinator);
 
                 // start sending heartbeats only if we have a valid generation
-                if (generation > 0)
+                if (generation > 0) {
                     heartbeatTask.reset();
+                }
                 future.complete(null);
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                 future.raise(new GroupAuthorizationException(groupId));
@@ -520,11 +567,13 @@ public abstract class AbstractCoordinator implements Closeable {
 
     /**
      * Check if we know who the coordinator is and we have an active connection
+     *
      * @return true if the coordinator is unknown
      */
     public boolean coordinatorUnknown() {
-        if (coordinator == null)
+        if (coordinator == null) {
             return true;
+        }
 
         if (client.connectionFailed(coordinator)) {
             coordinatorDead();
@@ -568,17 +617,20 @@ public abstract class AbstractCoordinator implements Closeable {
 
         this.generation = OffsetCommitRequest.DEFAULT_GENERATION_ID;
         this.memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
+        // 表示需要重新join
         rejoinNeeded = true;
     }
 
     private void sendLeaveGroupRequest() {
         LeaveGroupRequest request = new LeaveGroupRequest(groupId, memberId);
         RequestFuture<Void> future = client.send(coordinator, ApiKeys.LEAVE_GROUP, request)
-                .compose(new LeaveGroupResponseHandler());
+                                           .compose(new LeaveGroupResponseHandler());
 
         future.addListener(new RequestFutureListener<Void>() {
+
             @Override
-            public void onSuccess(Void value) {}
+            public void onSuccess(Void value) {
+            }
 
             @Override
             public void onFailure(RuntimeException e) {
@@ -590,6 +642,7 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     private class LeaveGroupResponseHandler extends CoordinatorResponseHandler<LeaveGroupResponse, Void> {
+
         @Override
         public LeaveGroupResponse parse(ClientResponse response) {
             return new LeaveGroupResponse(response.responseBody());
@@ -599,10 +652,11 @@ public abstract class AbstractCoordinator implements Closeable {
         public void handle(LeaveGroupResponse leaveResponse, RequestFuture<Void> future) {
             // process the response
             short errorCode = leaveResponse.errorCode();
-            if (errorCode == Errors.NONE.code())
+            if (errorCode == Errors.NONE.code()) {
                 future.complete(null);
-            else
+            } else {
                 future.raise(Errors.forCode(errorCode));
+            }
         }
     }
 
@@ -612,10 +666,11 @@ public abstract class AbstractCoordinator implements Closeable {
     public RequestFuture<Void> sendHeartbeatRequest() {
         HeartbeatRequest req = new HeartbeatRequest(this.groupId, this.generation, this.memberId);
         return client.send(coordinator, ApiKeys.HEARTBEAT, req)
-                .compose(new HeartbeatCompletionHandler());
+                     .compose(new HeartbeatCompletionHandler());
     }
 
     private class HeartbeatCompletionHandler extends CoordinatorResponseHandler<HeartbeatResponse, Void> {
+
         @Override
         public HeartbeatResponse parse(ClientResponse response) {
             return new HeartbeatResponse(response.responseBody());
@@ -629,22 +684,25 @@ public abstract class AbstractCoordinator implements Closeable {
                 log.debug("Received successful heartbeat response for group {}", groupId);
                 future.complete(null);
             } else if (error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE
-                    || error == Errors.NOT_COORDINATOR_FOR_GROUP) {
+                || error == Errors.NOT_COORDINATOR_FOR_GROUP) {
                 log.debug("Attempt to heart beat failed for group {} since coordinator {} is either not started or not valid.",
-                        groupId, coordinator);
+                    groupId, coordinator);
                 coordinatorDead();
                 future.raise(error);
             } else if (error == Errors.REBALANCE_IN_PROGRESS) {
                 log.debug("Attempt to heart beat failed for group {} since it is rebalancing.", groupId);
+                // 表示需要重新join
                 AbstractCoordinator.this.rejoinNeeded = true;
                 future.raise(Errors.REBALANCE_IN_PROGRESS);
             } else if (error == Errors.ILLEGAL_GENERATION) {
                 log.debug("Attempt to heart beat failed for group {} since generation id is not legal.", groupId);
+                // 表示需要重新join
                 AbstractCoordinator.this.rejoinNeeded = true;
                 future.raise(Errors.ILLEGAL_GENERATION);
             } else if (error == Errors.UNKNOWN_MEMBER_ID) {
                 log.debug("Attempt to heart beat failed for group {} since member id is not valid.", groupId);
                 memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
+                // 表示需要重新join
                 AbstractCoordinator.this.rejoinNeeded = true;
                 future.raise(Errors.UNKNOWN_MEMBER_ID);
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
@@ -656,7 +714,8 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     protected abstract class CoordinatorResponseHandler<R, T>
-            extends RequestFutureAdapter<ClientResponse, T> {
+        extends RequestFutureAdapter<ClientResponse, T> {
+
         protected ClientResponse response;
 
         public abstract R parse(ClientResponse response);
@@ -666,8 +725,9 @@ public abstract class AbstractCoordinator implements Closeable {
         @Override
         public void onFailure(RuntimeException e, RequestFuture<T> future) {
             // mark the coordinator as dead
-            if (e instanceof DisconnectException)
+            if (e instanceof DisconnectException) {
                 coordinatorDead();
+            }
             future.raise(e);
         }
 
@@ -678,19 +738,23 @@ public abstract class AbstractCoordinator implements Closeable {
                 R responseObj = parse(clientResponse);
                 handle(responseObj, future);
             } catch (RuntimeException e) {
-                if (!future.isDone())
+                if (!future.isDone()) {
                     future.raise(e);
+                }
             }
         }
-
     }
 
     private class GroupCoordinatorMetrics {
+
         public final Metrics metrics;
+
         public final String metricGrpName;
 
         public final Sensor heartbeatLatency;
+
         public final Sensor joinLatency;
+
         public final Sensor syncLatency;
 
         public GroupCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
@@ -707,28 +771,29 @@ public abstract class AbstractCoordinator implements Closeable {
 
             this.joinLatency = metrics.sensor("join-latency");
             this.joinLatency.add(metrics.metricName("join-time-avg",
-                    this.metricGrpName,
-                    "The average time taken for a group rejoin"), new Avg());
+                this.metricGrpName,
+                "The average time taken for a group rejoin"), new Avg());
             this.joinLatency.add(metrics.metricName("join-time-max",
-                    this.metricGrpName,
-                    "The max time taken for a group rejoin"), new Avg());
+                this.metricGrpName,
+                "The max time taken for a group rejoin"), new Avg());
             this.joinLatency.add(metrics.metricName("join-rate",
-                    this.metricGrpName,
-                    "The number of group joins per second"), new Rate(new Count()));
+                this.metricGrpName,
+                "The number of group joins per second"), new Rate(new Count()));
 
             this.syncLatency = metrics.sensor("sync-latency");
             this.syncLatency.add(metrics.metricName("sync-time-avg",
-                    this.metricGrpName,
-                    "The average time taken for a group sync"), new Avg());
+                this.metricGrpName,
+                "The average time taken for a group sync"), new Avg());
             this.syncLatency.add(metrics.metricName("sync-time-max",
-                    this.metricGrpName,
-                    "The max time taken for a group sync"), new Avg());
+                this.metricGrpName,
+                "The max time taken for a group sync"), new Avg());
             this.syncLatency.add(metrics.metricName("sync-rate",
-                    this.metricGrpName,
-                    "The number of group syncs per second"), new Rate(new Count()));
+                this.metricGrpName,
+                "The number of group syncs per second"), new Rate(new Count()));
 
             Measurable lastHeartbeat =
                 new Measurable() {
+
                     public double measure(MetricConfig config, long now) {
                         return TimeUnit.SECONDS.convert(now - heartbeat.lastHeartbeatSend(), TimeUnit.MILLISECONDS);
                     }
@@ -739,5 +804,4 @@ public abstract class AbstractCoordinator implements Closeable {
                 lastHeartbeat);
         }
     }
-
 }
