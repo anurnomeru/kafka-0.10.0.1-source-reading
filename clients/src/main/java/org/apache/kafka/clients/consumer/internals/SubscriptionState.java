@@ -83,13 +83,19 @@ public class SubscriptionState {
     private final Set<String> groupSubscription;
 
     /* do we need to request a partition assignment from the coordinator? */
+
     /** 是否需要由coordinator进行一次分区分配 */
     private boolean needsPartitionAssignment;
 
-    /* do we need to request the latest committed offsets from the coordinator? */
+    /**
+     * do we need to request the latest committed offsets from the coordinator?
+     * 标记是否需要从GroupCoordinator获取最近提交的offset，当出现异步提交offset操作或者是ReBalance操作
+     * 完成时会将其设置为true，成功获取最近提交offset之后会设置为false
+     */
     private boolean needsFetchCommittedOffsets;
 
     /* Default offset reset strategy */
+    /** 默认的offset重置策略 */
     private final OffsetResetStrategy defaultResetStrategy;
 
     /* Listener to be invoked when assignment changes */
@@ -140,6 +146,8 @@ public class SubscriptionState {
 
     /**
      * 将消费者自身订阅的Topic添加到{@link #groupSubscription}集合，重置{@link #subscription}集合
+     *
+     * 这里将needsPartitionAssignment设置为true是因为消费者topic发生了变化，所以需要进行分区分配
      */
     public void changeSubscription(Collection<String> topicsToSubscribe) {
         if (!this.subscription.equals(new HashSet<>(topicsToSubscribe))) {
@@ -176,6 +184,10 @@ public class SubscriptionState {
     }
 
     /**
+     * 这里的场景比较复杂，调用这里将needsPartitionAssignment设置为true，
+     * 主要是因为在某些请求响应中出现了 ILLEGAL_GENERATION等异常，或者
+     * 订阅的Topic出现了分区数量的变化
+     *
      * 将组中其他订阅的topic删除，只留自己的
      */
     public void needReassignment() {
@@ -187,6 +199,11 @@ public class SubscriptionState {
      * Change the assignment to the specified partitions provided by the user,
      * note this is different from {@link #assignFromSubscribed(Collection)}
      * whose input partitions are provided from the subscribed topics.
+     *
+     * 将分配更改为用户提供的指定分区，注意这和{@link #assignFromSubscribed(Collection)}不同，
+     * 它输入的分区时由订阅的topic来提供的
+     *
+     * 这里使用了用户分配模式，所以不需要needsPartitionAssignment
      */
     public void assignFromUser(Collection<TopicPartition> partitions) {
         setSubscriptionType(SubscriptionType.USER_ASSIGNED);
@@ -207,8 +224,13 @@ public class SubscriptionState {
     }
 
     /**
+     * 成功饿到SyncGroupResponse中的分区分配结果时进行的操作，此时ReBalance操作结束，所以将needsPartitionAssignment = false
+     *
      * Change the assignment to the specified partitions returned from the coordinator,
      * note this is different from {@link #assignFromUser(Collection)} which directly set the assignment from user inputs
+     *
+     * 将分配更改为coordinator协调器返回的指定分区，注意这个和 {@link #assignFromUser(Collection)}不同，
+     * 它直接从用户的分配来设置分配。
      */
     public void assignFromSubscribed(Collection<TopicPartition> assignments) {
         for (TopicPartition tp : assignments)
@@ -236,6 +258,9 @@ public class SubscriptionState {
         return this.subscriptionType == SubscriptionType.AUTO_PATTERN;
     }
 
+    /**
+     * 不再进行订阅，也需要重新进行分区分配
+     */
     public void unsubscribe() {
         this.subscription.clear();
         this.userAssignment.clear();
