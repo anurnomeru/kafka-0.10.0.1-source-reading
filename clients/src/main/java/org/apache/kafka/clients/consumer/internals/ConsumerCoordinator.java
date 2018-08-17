@@ -207,6 +207,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     throw new TopicAuthorizationException(new HashSet<>(cluster.unauthorizedTopics()));
                 }
 
+                // 检查是否为AUTO_PATTERN 或AUTO_TOPICS模式
                 // check if there are any changes to the metadata which should trigger a rebalance
                 if (subscriptions.partitionsAutoAssigned()) {
                     MetadataSnapshot snapshot = new MetadataSnapshot(subscriptions, cluster);
