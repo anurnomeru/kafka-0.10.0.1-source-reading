@@ -103,6 +103,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      */
     private MetadataSnapshot metadataSnapshot;
 
+    /**
+     * 也是用来储存Metadata的快照信息，不过是用来检测Partition分配的过程中有没有发生分区数量变化。具体是在Leader消费者开始分区
+     * 分配操作前，使用此字段记录metadata快照；收到SyncGroupResponse后，会比较此字段记录的快照与当前MetaData是否发生变化
+     * 如果发生变化，则要重新进行分区分配
+     */
     private MetadataSnapshot assignmentSnapshot;
 
     /**
