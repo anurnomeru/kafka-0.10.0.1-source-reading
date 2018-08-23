@@ -12,34 +12,40 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.TopicPartition;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.TopicPartition;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Abstract assignor implementation which does some common grunt work (in particular collecting
  * partition counts which are always needed in assignors).
+ *
+ * Abstract assignor 实现了一些常见而繁杂的操作（经常要在assignors中做的 particular收集  分区数）
  */
 public abstract class AbstractPartitionAssignor implements PartitionAssignor {
+
     private static final Logger log = LoggerFactory.getLogger(AbstractPartitionAssignor.class);
 
     /**
      * Perform the group assignment given the partition counts and member subscriptions
+     *
+     * 执行组的分配后，将得到分区数和分区成员的详情
+     *
      * @param partitionsPerTopic The number of partitions for each subscribed topic. Topics not in metadata will be excluded
-     *                           from this map.
+     * from this map. 每个订阅topic的分区数，如果元数据中不包含metadata将会从这个map中剔除
      * @param subscriptions Map from the memberId to their respective topic subscription
+     *
      * @return Map from each member to the list of partitions assigned to them.
      */
     public abstract Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
-                                                             Map<String, List<String>> subscriptions);
+        Map<String, List<String>> subscriptions);
 
     @Override
     public Subscription subscription(Set<String> topics) {
@@ -48,21 +54,29 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
 
     @Override
     public Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions) {
+        // 所有订阅的Topic
         Set<String> allSubscribedTopics = new HashSet<>();
+
+        // 目前来看topicSubscriptions就是把subscriptions里面的TopicList取出来了，然后把userData去掉了
         Map<String, List<String>> topicSubscriptions = new HashMap<>();
+
         for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
-            List<String> topics = subscriptionEntry.getValue().topics();
+            List<String> topics = subscriptionEntry.getValue()
+                                                   .topics();
             allSubscribedTopics.addAll(topics);
             topicSubscriptions.put(subscriptionEntry.getKey(), topics);
         }
 
+
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
-        for (String topic : allSubscribedTopics) {
+        for (String topic : allSubscribedTopics) {// 循环所有订阅的Topic
+
             Integer numPartitions = metadata.partitionCountForTopic(topic);
-            if (numPartitions != null && numPartitions > 0)
+            if (numPartitions != null && numPartitions > 0) {
                 partitionsPerTopic.put(topic, numPartitions);
-            else
+            } else {
                 log.debug("Skipping assignment for topic {} since no metadata is available", topic);
+            }
         }
 
         Map<String, List<TopicPartition>> rawAssignments = assign(partitionsPerTopic, topicSubscriptions);
