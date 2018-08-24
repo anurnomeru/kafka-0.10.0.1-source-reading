@@ -41,11 +41,12 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
      * @param partitionsPerTopic The number of partitions for each subscribed topic. Topics not in metadata will be excluded
      * from this map. 每个订阅topic的分区数，如果元数据中不包含metadata将会从这个map中剔除
      * @param subscriptions Map from the memberId to their respective topic subscription
+     * memberId 与各自 topic subscription 的映射
      *
      * @return Map from each member to the list of partitions assigned to them.
      */
-    public abstract Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
-        Map<String, List<String>> subscriptions);
+    public abstract Map<String, List<TopicPartition>> assign(Map<String/* partition */, Integer> partitionsPerTopic,
+        Map<String/* memberId */, List<String/* partition */>> subscriptions);
 
     @Override
     public Subscription subscription(Set<String> topics) {
@@ -67,7 +68,6 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
             topicSubscriptions.put(subscriptionEntry.getKey(), topics);
         }
 
-
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         for (String topic : allSubscribedTopics) {// 循环所有订阅的Topic
 
@@ -79,9 +79,11 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
             }
         }
 
+        // 将分区分配的逻辑委托给了assign重载，子类可自由实现
         Map<String, List<TopicPartition>> rawAssignments = assign(partitionsPerTopic, topicSubscriptions);
 
         // this class has maintains no user data, so just wrap the results
+        // 这个类不维护 user data，所以只是包装一下结果
         Map<String, Assignment> assignments = new HashMap<>();
         for (Map.Entry<String, List<TopicPartition>> assignmentEntry : rawAssignments.entrySet())
             assignments.put(assignmentEntry.getKey(), new Assignment(assignmentEntry.getValue()));
@@ -93,6 +95,9 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
         // this assignor maintains no internal state, so nothing to do
     }
 
+    /**
+     * 这个put避免了重复了key，将重复的key合并在了同一个list中
+     */
     protected static <K, V> void put(Map<K, List<V>> map, K key, V value) {
         List<V> list = map.get(key);
         if (list == null) {

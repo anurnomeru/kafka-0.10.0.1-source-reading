@@ -16,14 +16,13 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor;
-import org.apache.kafka.common.TopicPartition;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor;
+import org.apache.kafka.common.TopicPartition;
 
 /**
  * The range assignor works on a per-topic basis. For each topic, we lay out the available partitions in numeric order
@@ -45,45 +44,70 @@ public class RangeAssignor extends AbstractPartitionAssignor {
         return "range";
     }
 
-    private Map<String, List<String>> consumersPerTopic(Map<String, List<String>> consumerMetadata) {
+    /**
+     * 将原本的 member订阅了哪几个topic，转换为topic 被哪几个member订阅了
+     */
+    private Map<String/* topic */, List<String/* memberId */>> consumersPerTopic(Map<String/* memberId */, List<String/* topic */>> consumerMetadata) {
         Map<String, List<String>> res = new HashMap<>();
-        for (Map.Entry<String, List<String>> subscriptionEntry : consumerMetadata.entrySet()) {
+        for (Map.Entry<String/* memberId */, List<String/* topic */>> subscriptionEntry : consumerMetadata.entrySet()) {
             String consumerId = subscriptionEntry.getKey();
             for (String topic : subscriptionEntry.getValue())
+                // 这个put避免了重复了key，将重复的key合并在了同一个list中
                 put(res, topic, consumerId);
         }
         return res;
     }
 
+    public static void main(String[] args) {
+        System.out.println(100 % 31
+        );
+    }
+
+    /**
+     * 针对每个Topic，n=分区数/消费者数量，m=分区数%消费者数量，前m个消费者每个分配n+1个分区，后面的
+     * (消费者数量-m)个消费者每个分配n个partition
+     *
+     * @param partitionsPerTopic 每个订阅topic的分区数，如果元数据中不包含metadata将会从这个map中剔除
+     * @param subscriptions memberId 与各自 topic subscription 的映射
+     */
     @Override
-    public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
-                                                    Map<String, List<String>> subscriptions) {
-        Map<String, List<String>> consumersPerTopic = consumersPerTopic(subscriptions);
-        Map<String, List<TopicPartition>> assignment = new HashMap<>();
+    public Map<String, List<TopicPartition>> assign(Map<String/* topic */, Integer> partitionsPerTopic,
+        Map<String/* memberId */, List<String/* topic */>> subscriptions) {
+
+        // 将原本的 member订阅了哪几个topic，转换为topic 被哪几个member订阅了 topicPerConsumer => consumerPerTopic
+        Map<String/* topic */, List<String/* memberId */>> consumersPerTopic = consumersPerTopic(subscriptions);
+
+        // 为每个 topic new一个空的TopicPartition订阅集合
+        Map<String/* memberId */, List<TopicPartition>> assignment = new HashMap<>();
         for (String memberId : subscriptions.keySet())
             assignment.put(memberId, new ArrayList<TopicPartition>());
 
         for (Map.Entry<String, List<String>> topicEntry : consumersPerTopic.entrySet()) {
             String topic = topicEntry.getKey();
-            List<String> consumersForTopic = topicEntry.getValue();
+            List<String/* memberId */> consumersForTopic = topicEntry.getValue();
 
+            // 根据topic名字从 partitionsPerTopic 到partition下有多少个topic
             Integer numPartitionsForTopic = partitionsPerTopic.get(topic);
-            if (numPartitionsForTopic == null)
+            if (numPartitionsForTopic == null) {
                 continue;
+            }
 
             Collections.sort(consumersForTopic);
 
-            int numPartitionsPerConsumer = numPartitionsForTopic / consumersForTopic.size();
-            int consumersWithExtraPartition = numPartitionsForTopic % consumersForTopic.size();
+            int numConsumersForConsumer = consumersForTopic.size();
+
+            int N_numPartitionsPerConsumer = numPartitionsForTopic / numConsumersForConsumer;
+            int M_consumersWithExtraPartition = numPartitionsForTopic % numConsumersForConsumer;
 
             List<TopicPartition> partitions = AbstractPartitionAssignor.partitions(topic, numPartitionsForTopic);
+
             for (int i = 0, n = consumersForTopic.size(); i < n; i++) {
-                int start = numPartitionsPerConsumer * i + Math.min(i, consumersWithExtraPartition);
-                int length = numPartitionsPerConsumer + (i + 1 > consumersWithExtraPartition ? 0 : 1);
-                assignment.get(consumersForTopic.get(i)).addAll(partitions.subList(start, start + length));
+                int start = N_numPartitionsPerConsumer * i + Math.min(i, M_consumersWithExtraPartition);
+                int length = N_numPartitionsPerConsumer + (i + 1 > M_consumersWithExtraPartition ? 0 : 1);
+                assignment.get(consumersForTopic.get(i))
+                          .addAll(partitions.subList(start, start + length));
             }
         }
         return assignment;
     }
-
 }
