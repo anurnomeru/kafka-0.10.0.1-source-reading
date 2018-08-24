@@ -58,11 +58,6 @@ public class RangeAssignor extends AbstractPartitionAssignor {
         return res;
     }
 
-    public static void main(String[] args) {
-        System.out.println(100 % 31
-        );
-    }
-
     /**
      * 针对每个Topic，n=分区数/消费者数量，m=分区数%消费者数量，前m个消费者每个分配n+1个分区，后面的
      * (消费者数量-m)个消费者每个分配n个partition
@@ -101,6 +96,8 @@ public class RangeAssignor extends AbstractPartitionAssignor {
 
             List<TopicPartition> partitions = AbstractPartitionAssignor.partitions(topic, numPartitionsForTopic);
 
+            // n = 分区数/消费者，m = 分区数%消费者，前m个消费者分配n+1个分区（每有一个余数，分配多一个），
+            // 后面的消费者消费n个分区
             for (int i = 0, n = consumersForTopic.size(); i < n; i++) {
                 int start = N_numPartitionsPerConsumer * i + Math.min(i, M_consumersWithExtraPartition);
                 int length = N_numPartitionsPerConsumer + (i + 1 > M_consumersWithExtraPartition ? 0 : 1);
