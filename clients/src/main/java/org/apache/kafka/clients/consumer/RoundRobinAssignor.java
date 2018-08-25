@@ -12,17 +12,16 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.CircularIterator;
-import org.apache.kafka.common.utils.Utils;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.CircularIterator;
+import org.apache.kafka.common.utils.Utils;
 
 /**
  * The roundrobin assignor lays out all the available partitions and all the available consumers. It
@@ -39,9 +38,15 @@ import java.util.TreeSet;
  */
 public class RoundRobinAssignor extends AbstractPartitionAssignor {
 
+    /**
+     * @param partitionsPerTopic The number of partitions for each subscribed topic. Topics not in metadata will be excluded
+     * from this map. 每个订阅topic的分区数，如果元数据中不包含metadata将会从这个map中剔除
+     * @param subscriptions Map from the memberId to their respective topic subscription
+     * memberId 与各自 topic subscription 的映射
+     */
     @Override
-    public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
-                                                    Map<String, List<String>> subscriptions) {
+    public Map<String/* memberId */, List<TopicPartition>> assign(Map<String/* topic */, Integer/*  */> partitionsPerTopic,
+        Map<String/* memberId */, List<String/* topic */>> subscriptions) {
         Map<String, List<TopicPartition>> assignment = new HashMap<>();
         for (String memberId : subscriptions.keySet())
             assignment.put(memberId, new ArrayList<TopicPartition>());
@@ -49,16 +54,18 @@ public class RoundRobinAssignor extends AbstractPartitionAssignor {
         CircularIterator<String> assigner = new CircularIterator<>(Utils.sorted(subscriptions.keySet()));
         for (TopicPartition partition : allPartitionsSorted(partitionsPerTopic, subscriptions)) {
             final String topic = partition.topic();
-            while (!subscriptions.get(assigner.peek()).contains(topic))
+            while (!subscriptions.get(assigner.peek())
+                                 .contains(topic)) {
                 assigner.next();
-            assignment.get(assigner.next()).add(partition);
+            }
+            assignment.get(assigner.next())
+                      .add(partition);
         }
         return assignment;
     }
 
-
     public List<TopicPartition> allPartitionsSorted(Map<String, Integer> partitionsPerTopic,
-                                                    Map<String, List<String>> subscriptions) {
+        Map<String, List<String>> subscriptions) {
         SortedSet<String> topics = new TreeSet<>();
         for (List<String> subscription : subscriptions.values())
             topics.addAll(subscription);
@@ -66,8 +73,9 @@ public class RoundRobinAssignor extends AbstractPartitionAssignor {
         List<TopicPartition> allPartitions = new ArrayList<>();
         for (String topic : topics) {
             Integer numPartitionsForTopic = partitionsPerTopic.get(topic);
-            if (numPartitionsForTopic != null)
+            if (numPartitionsForTopic != null) {
                 allPartitions.addAll(AbstractPartitionAssignor.partitions(topic, numPartitionsForTopic));
+            }
         }
         return allPartitions;
     }
@@ -76,5 +84,4 @@ public class RoundRobinAssignor extends AbstractPartitionAssignor {
     public String name() {
         return "roundrobin";
     }
-
 }

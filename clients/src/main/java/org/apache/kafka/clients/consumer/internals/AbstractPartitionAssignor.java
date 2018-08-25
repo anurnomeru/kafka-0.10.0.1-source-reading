@@ -45,8 +45,8 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
      *
      * @return Map from each member to the list of partitions assigned to them.
      */
-    public abstract Map<String, List<TopicPartition>> assign(Map<String/* partition */, Integer> partitionsPerTopic,
-        Map<String/* memberId */, List<String/* partition */>> subscriptions);
+    public abstract Map<String, List<TopicPartition>> assign(Map<String/* topic */, Integer> partitionsPerTopic,
+        Map<String/* memberId */, List<String/* topic */>> subscriptions);
 
     @Override
     public Subscription subscription(Set<String> topics) {
