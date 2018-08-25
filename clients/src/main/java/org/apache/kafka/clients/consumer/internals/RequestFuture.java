@@ -137,7 +137,7 @@ public class RequestFuture<T> {
     }
 
     /**
-     * Raise an exception. The request will be marked as failed, and the caller can either
+     * Raise The request will be marked as failed, and the caller can either
      * handle the exception or throw it.
      *
      * @param e corresponding exception to be passed to caller
@@ -190,7 +190,7 @@ public class RequestFuture<T> {
     /**
      * Convert from a request future of one type to another type
      *
-     * todo ???????????
+     * 将request future从一个type转换为另一个type
      *
      * @param adapter The adapter which does the conversion
      * @param <S> The type of the future adapted to

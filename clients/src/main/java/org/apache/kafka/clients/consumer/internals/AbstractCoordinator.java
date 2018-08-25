@@ -347,13 +347,16 @@ public abstract class AbstractCoordinator implements Closeable {
                 return;
             }
 
-            if (!heartbeat.shouldHeartbeat(now)) {
+            // 是否需要发送心跳包
+            if (!heartbeat.shouldHeartbeat(now)) {// 不需发送
                 // we don't need to heartbeat now, so reschedule for when we do
+                // 现在不需要发送心跳包，所以重新schedule一下
                 client.schedule(this, now + heartbeat.timeToNextHeartbeat(now));
-            } else {
+            } else {// 需发送
                 heartbeat.sentHeartbeat(now);
                 requestInFlight = true;
 
+                // 发送心跳请求
                 RequestFuture<Void> future = sendHeartbeatRequest();
                 future.addListener(new RequestFutureListener<Void>() {
 
