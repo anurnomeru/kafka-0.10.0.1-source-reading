@@ -12,6 +12,12 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.io.Closeable;
+import java.nio.ByteBuffer;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -47,19 +53,19 @@ import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.Closeable;
-import java.nio.ByteBuffer;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
-
 /**
  * AbstractCoordinator implements group management for a single group member by interacting with
  * a designated Kafka broker (the coordinator). Group semantics are provided by extending this class.
  * See {@link ConsumerCoordinator} for example usage.
  *
+ * AbstractCoordinator通过与一个指定的 kafkaBroker（Coordinator）交互，为单独的组员实现了组管理。
+ * 通过拓展这个类可以实现 组语义(Group semantics )？ {@link ConsumerCoordinator} 是一个示例。
+ *
  * From a high level, Kafka's group management protocol consists of the following sequence of actions:
+ *
+ * 从高层次来讲，Kafka的组管理协议由以下顺序步骤组成：
+ *
+ *  - Group 注册：
  *
  * <ol>
  * <li>Group Registration: Group members register with the coordinator providing their own metadata
