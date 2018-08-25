@@ -65,7 +65,13 @@ import org.slf4j.LoggerFactory;
  *
  * 从高层次来讲，Kafka的组管理协议由以下顺序步骤组成：
  *
- *  - Group 注册：
+ * - Group 注册：Group成员注册到Coordinator上，并提供自己metadata（比如说他们感兴趣的topics set）
+ *
+ * - leader选举：coordinator选择group的成员并且选择一个作为leader
+ *
+ * - state 分配：leader从所有group内成员中收集metadata并分配state
+ *
+ * - Group 稳定：每个member收到leader分配的state并开始处理
  *
  * <ol>
  * <li>Group Registration: Group members register with the coordinator providing their own metadata
@@ -77,6 +83,11 @@ import org.slf4j.LoggerFactory;
  * <li>Group Stabilization: Each member receives the state assigned by the leader and begins
  * processing.</li>
  * </ol>
+ *
+ * 为了使用此协议需要实现
+ * 在metadata()中 ，定义metadata每个成员在Group注册时提供的格式；
+ * 在performAssignment() 中，定义leader 提供的 state 分配的格式；
+ * 在onJoinComplete()中，定义如何成为可用的成员；todo 翻译可能不准确
  *
  * To leverage this protocol, an implementation must define the format of metadata provided by each
  * member for group registration in {@link #metadata()} and the format of the state assignment provided
@@ -232,6 +243,8 @@ public abstract class AbstractCoordinator implements Closeable {
     /**
      * Check whether the group should be rejoined (e.g. if metadata changes)
      *
+     * 检查组是否需要rejoined，比如metadata变了
+     *
      * @return true if it should, false otherwise
      */
     protected boolean needRejoin() {
@@ -310,17 +323,26 @@ public abstract class AbstractCoordinator implements Closeable {
             }
         }
 
+        /**
+         * 发送心跳包
+         *
+         * @param now current time in milliseconds
+         */
         @Override
         public void run(final long now) {
+            // 还没有 generation 或者 需要重新入组 或者 有没有连上 Coordinator
             if (generation < 0 || needRejoin() || coordinatorUnknown()) {
                 // no need to send the heartbeat we're not using auto-assignment or if we are
                 // awaiting a rebalance
+                // 不需要发送心跳包因为我们没有使用 auto-assignment 自动分配 或者可能正等待Rebalance
                 return;
             }
 
+            // 是否超时
             if (heartbeat.sessionTimeoutExpired(now)) {
                 // we haven't received a successful heartbeat in one session interval
                 // so mark the coordinator dead
+                // 没有在一个session间隔中收到一个成功的心跳包，所以标记Coordinator挂了
                 coordinatorDead();
                 return;
             }
@@ -574,6 +596,8 @@ public abstract class AbstractCoordinator implements Closeable {
     /**
      * Check if we know who the coordinator is and we have an active connection
      *
+     * 检查是否知道Coordinator是谁，并且我们有有效的连接。
+     *
      * @return true if the coordinator is unknown
      */
     public boolean coordinatorUnknown() {
@@ -591,6 +615,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
     /**
      * Mark the current coordinator as dead.
+     * 将Coordinator标记为死亡，实际上就是将ConsumerNetworkClient中相应的nodeId标记为失败
      */
     protected void coordinatorDead() {
         if (this.coordinator != null) {

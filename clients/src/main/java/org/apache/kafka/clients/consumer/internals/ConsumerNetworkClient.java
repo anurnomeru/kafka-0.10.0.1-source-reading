@@ -86,8 +86,6 @@ public class ConsumerNetworkClient implements Closeable {
      * Schedule a new task to be executed at the given time. This is "best-effort" scheduling and
      * should only be used for coarse synchronization.
      *
-     *
-     *
      * @param task The task to be scheduled
      * @param at The time it should run
      */
@@ -144,7 +142,6 @@ public class ConsumerNetworkClient implements Closeable {
 
     /**
      * 找寻负载最低的node
-     * @return
      */
     public Node leastLoadedNode() {
         return client.leastLoadedNode(time.milliseconds());
@@ -467,6 +464,8 @@ public class ConsumerNetworkClient implements Closeable {
     /**
      * Find whether a previous connection has failed. Note that the failure state will persist until either
      * {@link #tryConnect(Node)} or {@link #send(Node, ApiKeys, AbstractRequest)} has been called.
+     *
+     * 之前的连接是否失败了，注意失败的状态将会持久化直到调用{@link #tryConnect(Node)} 或 {@link #send(Node, ApiKeys, AbstractRequest)}
      *
      * @param node Node to connect to if possible
      */
