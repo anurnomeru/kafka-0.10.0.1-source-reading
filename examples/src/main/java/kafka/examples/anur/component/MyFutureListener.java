@@ -9,7 +9,5 @@ public interface MyFutureListener {
 
     void onSuccess();
 
-    void onFail();
-
-
+    void onFailure();
 }
