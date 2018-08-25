@@ -2,12 +2,10 @@ package kafka.examples.anur.component;
 
 /**
  * Created by Anur IjuoKaruKas on 2018/8/25
- *
- * 自己实现一个listener
  */
-public interface MyFutureListener<T> {
+public interface MyAdaptor<F, T> {
 
-    void onSuccess(T value);
+    void onSucceeded(F value, MyFuture<T> future);
 
     void onFailure();
 }

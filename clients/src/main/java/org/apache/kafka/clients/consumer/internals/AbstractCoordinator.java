@@ -703,7 +703,31 @@ public abstract class AbstractCoordinator implements Closeable {
                      .compose(new HeartbeatCompletionHandler());
     }
 
-    private class HeartbeatCompletionHandler extends CoordinatorResponseHandler<HeartbeatResponse, Void> {
+    private class HeartbeatCompletionHandler extends CoordinatorResponseHandler<HeartbeatResponse/* 从这个 */, Void/* 到这个 */> {
+
+        protected ClientResponse response;
+
+        @Override
+        public void onSuccess(ClientResponse clientResponse, RequestFuture<Void> future) {
+            try {
+                this.response = clientResponse;
+                HeartbeatResponse responseObj = parse(clientResponse);
+                handle(responseObj, future);
+            } catch (RuntimeException e) {
+                if (!future.isDone()) {
+                    future.raise(e);
+                }
+            }
+        }
+
+        @Override
+        public void onFailure(RuntimeException e, RequestFuture<Void> future) {
+            // mark the coordinator as dead
+            if (e instanceof DisconnectException) {
+                coordinatorDead();
+            }
+            future.raise(e);
+        }
 
         @Override
         public HeartbeatResponse parse(ClientResponse response) {

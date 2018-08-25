@@ -1,23 +1,26 @@
 package kafka.examples.anur.component;
 
+import kafka.utils.Json;
 /**
  * Created by Anur IjuoKaruKas on 2018/8/25
  */
 public class Tester extends Thread {
 
-    private MyFuture<String> myFuture;
+    private MyFuture myFuture;
 
-    public Tester(MyFuture<String> myFuture) {
+    public Tester(MyFuture myFuture) {
         this.myFuture = myFuture;
     }
 
     public static void main(String[] args) throws InterruptedException {
         MyFuture<String> myFuture = new MyFuture<>();
 
-        myFuture.addListener(new MyFutureListener() {
+        MyFuture<Book> bookMyFuture = myFuture.compose(new BookAdaptor());
+
+        bookMyFuture.addListener(new MyFutureListener<String>() {
 
             @Override
-            public void onSuccess() {
+            public void onSuccess(String value) {
                 System.out.println("监听器成功");
             }
 
@@ -26,14 +29,16 @@ public class Tester extends Thread {
                 System.out.println("监听器失败");
             }
         });
-        Tester tester = new Tester(myFuture);
+
+        Tester tester = new Tester(bookMyFuture);
         tester.start();
 
         System.out.println("喵喵喵");
-        while (!myFuture.isSucceeded() && !myFuture.isFailed()) {
+        while (!bookMyFuture.isSucceeded() && !bookMyFuture.isFailed()) {
             Thread.sleep(100);
         }
-        System.out.println(myFuture.getResult());
+
+        System.out.println(Json.encode(bookMyFuture.getResult()));
     }
 
     @Override
@@ -43,8 +48,8 @@ public class Tester extends Thread {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
-//        myFuture.complete("啦啦啦啦啦");
-        myFuture.raise();
+        myFuture.complete("啦啦啦啦啦");
+        //        myFuture.raise();
         super.run();
     }
 }

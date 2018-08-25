@@ -46,9 +46,27 @@ public class MyFuture<T> {
         return this;
     }
 
+    public <S> MyFuture<S> compose(final MyAdaptor<T, S> myAdaptor) {
+        final MyFuture<S> adapted = new MyFuture<>();
+        addListener(new MyFutureListener<T>() {
+
+            @Override
+            public void onSuccess(T value) {
+                myAdaptor.onSucceeded(value, adapted);
+            }
+
+            @Override
+            public void onFailure() {
+
+            }
+        });
+
+        return adapted;
+    }
+
     private void onSuccess() {
         for (MyFutureListener myFutureListener : listenerList) {
-            myFutureListener.onSuccess();
+            myFutureListener.onSuccess(this.result);
         }
     }
 
