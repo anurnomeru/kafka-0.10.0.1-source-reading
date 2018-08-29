@@ -30,15 +30,15 @@ public class Tester extends Thread {
             }
         });
 
-        Tester tester = new Tester(bookMyFuture);
+        Tester tester = new Tester(myFuture);
         tester.start();
 
         System.out.println("喵喵喵");
-        while (!bookMyFuture.isSucceeded() && !bookMyFuture.isFailed()) {
+        while (!myFuture.isSucceeded() && !myFuture.isFailed()) {
             Thread.sleep(100);
         }
 
-        System.out.println(Json.encode(bookMyFuture.getResult()));
+        System.out.println(Json.encode(myFuture .getResult()));
     }
 
     @Override
