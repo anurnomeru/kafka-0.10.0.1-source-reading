@@ -17,10 +17,12 @@ import java.util.Arrays;
 
 /**
  * A record that can be serialized and deserialized according to a pre-defined schema
- * 是一个可以根据预先设定好的来序列化和反序列化的消息
+ * 是一个可以根据预先设定好的来序列化和反序列化的记录
  */
 public class Struct {
+
     private final Schema schema;
+
     private final Object[] values;
 
     Struct(Schema schema, Object[] values) {
@@ -44,24 +46,27 @@ public class Struct {
      * Return the value of the given pre-validated field, or if the value is missing return the default value.
      *
      * @param field The field for which to get the default value
+     *
      * @throws SchemaException if the field has no value and has no default.
      */
     private Object getFieldOrDefault(Field field) {
         Object value = this.values[field.index];
-        if (value != null)
+        if (value != null) {
             return value;
-        else if (field.defaultValue != Field.NO_DEFAULT)
+        } else if (field.defaultValue != Field.NO_DEFAULT) {
             return field.defaultValue;
-        else if (field.type.isNullable())
+        } else if (field.type.isNullable()) {
             return null;
-        else
+        } else {
             throw new SchemaException("Missing value for field '" + field.name + "' which has no default value.");
+        }
     }
 
     /**
      * Get the value for the field directly by the field index with no lookup needed (faster!)
      *
      * @param field The field to look up
+     *
      * @return The value for that field.
      * @throws SchemaException if the field has no value and has no default.
      */
@@ -74,19 +79,21 @@ public class Struct {
      * Get the record value for the field with the given name by doing a hash table lookup (slower!)
      *
      * @param name The name of the field
+     *
      * @return The value in the record
      * @throws SchemaException If no such field exists
      */
     public Object get(String name) {
         Field field = schema.get(name);
-        if (field == null)
+        if (field == null) {
             throw new SchemaException("No such field: " + name);
+        }
         return getFieldOrDefault(field);
     }
 
     /**
      * Check if the struct contains a field.
-     * @param name
+     *
      * @return Whether a field exists.
      */
     public boolean hasField(String name) {
@@ -159,15 +166,17 @@ public class Struct {
 
     public ByteBuffer getBytes(Field field) {
         Object result = get(field);
-        if (result instanceof byte[])
+        if (result instanceof byte[]) {
             return ByteBuffer.wrap((byte[]) result);
+        }
         return (ByteBuffer) result;
     }
 
     public ByteBuffer getBytes(String name) {
         Object result = get(name);
-        if (result instanceof byte[])
+        if (result instanceof byte[]) {
             return ByteBuffer.wrap((byte[]) result);
+        }
         return (ByteBuffer) result;
     }
 
@@ -176,6 +185,7 @@ public class Struct {
      *
      * @param field The field
      * @param value The value
+     *
      * @throws SchemaException If the validation of the field failed
      */
     public Struct set(Field field, Object value) {
@@ -189,12 +199,14 @@ public class Struct {
      *
      * @param name The name of the field
      * @param value The value to set
+     *
      * @throws SchemaException If the field is not known
      */
     public Struct set(String name, Object value) {
         Field field = this.schema.get(name);
-        if (field == null)
+        if (field == null) {
             throw new SchemaException("Unknown field: " + name);
+        }
         this.values[field.index] = value;
         return this;
     }
@@ -205,6 +217,7 @@ public class Struct {
      * instantiated with this method.
      *
      * @param field The field to create an instance of
+     *
      * @return The struct
      * @throws SchemaException If the given field is not a container type
      */
@@ -224,6 +237,7 @@ public class Struct {
      * Create a struct instance for the given field which must be a container type (struct or array)
      *
      * @param field The name of the field to create (field must be a schema type)
+     *
      * @return The struct
      * @throws SchemaException If the given field is not a container type
      */
@@ -258,10 +272,12 @@ public class Struct {
      * @throws SchemaException If validation fails
      */
     private void validateField(Field field) {
-        if (this.schema != field.schema)
+        if (this.schema != field.schema) {
             throw new SchemaException("Attempt to access field '" + field.name + "' from a different schema instance.");
-        if (field.index > values.length)
+        }
+        if (field.index > values.length) {
             throw new SchemaException("Invalid field index: " + field.index);
+        }
     }
 
     /**
@@ -296,14 +312,17 @@ public class Struct {
                 b.append('[');
                 for (int j = 0; j < arrayValue.length; j++) {
                     b.append(arrayValue[j]);
-                    if (j < arrayValue.length - 1)
+                    if (j < arrayValue.length - 1) {
                         b.append(',');
+                    }
                 }
                 b.append(']');
-            } else
+            } else {
                 b.append(this.values[i]);
-            if (i < this.values.length - 1)
+            }
+            if (i < this.values.length - 1) {
                 b.append(',');
+            }
         }
         b.append('}');
         return b.toString();
@@ -317,8 +336,8 @@ public class Struct {
             Field f = this.schema.get(i);
             if (f.type() instanceof ArrayOf) {
                 if (this.get(f) != null) {
-                    Object[] arrayObject = (Object []) this.get(f);
-                    for (Object arrayItem: arrayObject)
+                    Object[] arrayObject = (Object[]) this.get(f);
+                    for (Object arrayItem : arrayObject)
                         result = prime * result + arrayItem.hashCode();
                 }
             } else {
@@ -333,15 +352,19 @@ public class Struct {
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj)
+        if (this == obj) {
             return true;
-        if (obj == null)
+        }
+        if (obj == null) {
             return false;
-        if (getClass() != obj.getClass())
+        }
+        if (getClass() != obj.getClass()) {
             return false;
+        }
         Struct other = (Struct) obj;
-        if (schema != other.schema)
+        if (schema != other.schema) {
             return false;
+        }
         for (int i = 0; i < this.values.length; i++) {
             Field f = this.schema.get(i);
             boolean result;
@@ -352,10 +375,10 @@ public class Struct {
                 Object otherField = other.get(f);
                 result = (thisField == null && otherField == null) || thisField.equals(otherField);
             }
-            if (!result)
+            if (!result) {
                 return false;
+            }
         }
         return true;
     }
-
 }

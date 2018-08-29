@@ -3,9 +3,9 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -17,12 +17,17 @@ import org.apache.kafka.common.protocol.types.Struct;
 /**
  * A response from the server. Contains both the body of the response as well as the correlated request that was
  * originally sent.
+ *
+ * 从服务端返回的response，包含了 response body 和最开始发送的那个与之相关的请求
  */
 public class ClientResponse {
 
     private final long receivedTimeMs;
+
     private final boolean disconnected;
+
     private final ClientRequest request;
+
     private final Struct responseBody;
 
     /**
@@ -66,13 +71,12 @@ public class ClientResponse {
     @Override
     public String toString() {
         return "ClientResponse(receivedTimeMs=" + receivedTimeMs +
-               ", disconnected=" +
-               disconnected +
-               ", request=" +
-               request +
-               ", responseBody=" +
-               responseBody +
-               ")";
+            ", disconnected=" +
+            disconnected +
+            ", request=" +
+            request +
+            ", responseBody=" +
+            responseBody +
+            ")";
     }
-
 }

@@ -705,13 +705,18 @@ public abstract class AbstractCoordinator implements Closeable {
 
     private class HeartbeatCompletionHandler extends CoordinatorResponseHandler<HeartbeatResponse/* 从这个 */, Void/* 到这个 */> {
 
+        // 原 client.send(coordinator, ApiKeys.HEARTBEAT, req) 会返回的对象。
         protected ClientResponse response;
 
         @Override
         public void onSuccess(ClientResponse clientResponse, RequestFuture<Void> future) {
+            // 让我们看看在成功时都做了什么
             try {
                 this.response = clientResponse;
+                // 将clientResponse解析为心跳包 HeartbeatResponse
                 HeartbeatResponse responseObj = parse(clientResponse);
+
+                // 处理心跳包
                 handle(responseObj, future);
             } catch (RuntimeException e) {
                 if (!future.isDone()) {
@@ -731,15 +736,20 @@ public abstract class AbstractCoordinator implements Closeable {
 
         @Override
         public HeartbeatResponse parse(ClientResponse response) {
+            // 提取返回的body （Struct对象），new一个HeartbeatResponse
             return new HeartbeatResponse(response.responseBody());
         }
 
         @Override
         public void handle(HeartbeatResponse heartbeatResponse, RequestFuture<Void> future) {
             sensors.heartbeatLatency.record(response.requestLatencyMs());
+
+            // 将heartbeatResponse中short类型的 errCode 转为 Error对象
             Errors error = Errors.forCode(heartbeatResponse.errorCode());
             if (error == Errors.NONE) {
                 log.debug("Received successful heartbeat response for group {}", groupId);
+
+                // 没报错，直接将这个引用置为成功，成功后会调用 RequestFuture<Void> future 的 onSuccess方法
                 future.complete(null);
             } else if (error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE
                 || error == Errors.NOT_COORDINATOR_FOR_GROUP) {

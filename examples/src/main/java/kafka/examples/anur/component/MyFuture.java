@@ -74,14 +74,15 @@ public class MyFuture<T> {
     }
 
     private void onSuccess() {
-        System.out.println("√onSuccess - 调用listener");
         for (MyFutureListener myFutureListener : listenerList) {
+            System.out.println("√onSuccess - 调用listener");
             myFutureListener.onSuccess(this.result);
         }
     }
 
     private void onFailure() {
         for (MyFutureListener myFutureListener : listenerList) {
+            System.out.println("√onFailure - 调用listener");
             myFutureListener.onFailure();
         }
     }

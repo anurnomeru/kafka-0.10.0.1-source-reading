@@ -12,11 +12,10 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.common.errors.RetriableException;
-import org.apache.kafka.common.protocol.Errors;
-
 import java.util.ArrayList;
 import java.util.List;
+import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.protocol.Errors;
 
 /**
  * Result of an asynchronous request from {@link ConsumerNetworkClient}. Use {@link ConsumerNetworkClient#poll(long)}
@@ -201,6 +200,7 @@ public class RequestFuture<T> {
         final RequestFuture<S> adapted = new RequestFuture<S>();
         addListener(new RequestFutureListener<T>() {
 
+            // 实际上这里就是让原来的 future 在succeed 时，会调用 adapter 中的 onSuccess 方法
             @Override
             public void onSuccess(T value) {
                 adapter.onSuccess(value, adapted);
@@ -212,6 +212,7 @@ public class RequestFuture<T> {
             }
         });
 
+        // 返回的这个新的 future 对象，也会在 adaptor 中持有一份引用
         return adapted;
     }
 
