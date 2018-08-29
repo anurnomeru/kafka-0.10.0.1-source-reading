@@ -751,29 +751,29 @@ public abstract class AbstractCoordinator implements Closeable {
 
                 // 没报错，直接将这个引用置为成功，成功后会调用 RequestFuture<Void> future 的 onSuccess方法
                 future.complete(null);
-            } else if (error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE
-                || error == Errors.NOT_COORDINATOR_FOR_GROUP) {
+            } else if (error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE// 组协调器不可用
+                || error == Errors.NOT_COORDINATOR_FOR_GROUP) {// 没有协调器
                 log.debug("Attempt to heart beat failed for group {} since coordinator {} is either not started or not valid.",
                     groupId, coordinator);
-                coordinatorDead();
+                coordinatorDead();// 标记协调器挂了
                 future.raise(error);
-            } else if (error == Errors.REBALANCE_IN_PROGRESS) {
+            } else if (error == Errors.REBALANCE_IN_PROGRESS) {// 当前组在重负载，所以需要重加入
                 log.debug("Attempt to heart beat failed for group {} since it is rebalancing.", groupId);
                 // 表示需要重新join
-                AbstractCoordinator.this.rejoinNeeded = true;
+                AbstractCoordinator.this.rejoinNeeded = true;// 表示当前协调器需要重加入
                 future.raise(Errors.REBALANCE_IN_PROGRESS);
-            } else if (error == Errors.ILLEGAL_GENERATION) {
+            } else if (error == Errors.ILLEGAL_GENERATION) {// 世代错误
                 log.debug("Attempt to heart beat failed for group {} since generation id is not legal.", groupId);
                 // 表示需要重新join
-                AbstractCoordinator.this.rejoinNeeded = true;
+                AbstractCoordinator.this.rejoinNeeded = true;// 表示当前协调器需要重加入
                 future.raise(Errors.ILLEGAL_GENERATION);
-            } else if (error == Errors.UNKNOWN_MEMBER_ID) {
+            } else if (error == Errors.UNKNOWN_MEMBER_ID) {// 协调器不认识这个成员
                 log.debug("Attempt to heart beat failed for group {} since member id is not valid.", groupId);
                 memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
                 // 表示需要重新join
-                AbstractCoordinator.this.rejoinNeeded = true;
+                AbstractCoordinator.this.rejoinNeeded = true;// 表示当前协调器需要重加入
                 future.raise(Errors.UNKNOWN_MEMBER_ID);
-            } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
+            } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {// 组认证失败
                 future.raise(new GroupAuthorizationException(groupId));
             } else {
                 future.raise(new KafkaException("Unexpected error in heartbeat response: " + error.message()));
