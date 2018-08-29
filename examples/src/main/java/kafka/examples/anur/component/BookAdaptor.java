@@ -9,7 +9,6 @@ public class BookAdaptor implements MyAdaptor<String, Book> {
 
     @Override
     public void onSucceeded(String value, MyFuture<Book> future) {
-        future = new MyFuture<>();
         future.complete(new Book(value));
         System.out.println("???");
     }

@@ -17,7 +17,8 @@ public class Tester extends Thread {
 
         MyFuture<Book> bookMyFuture = myFuture.compose(new BookAdaptor());
 
-        bookMyFuture.addListener(new MyFutureListener<String>() {
+        // 不应该在 bookMyFuture 生效
+        myFuture.addListener(new MyFutureListener<String>() {
 
             @Override
             public void onSuccess(String value) {
@@ -32,13 +33,17 @@ public class Tester extends Thread {
 
         Tester tester = new Tester(myFuture);
         tester.start();
-
-        System.out.println("喵喵喵");
         while (!myFuture.isSucceeded() && !myFuture.isFailed()) {
             Thread.sleep(100);
         }
+        System.out.println(Json.encode(myFuture.getResult()));
 
-        System.out.println(Json.encode(myFuture .getResult()));
+//        Tester tester1 = new Tester(bookMyFuture);
+//        tester1.start();
+//        while (!bookMyFuture.isSucceeded() && !bookMyFuture.isFailed()) {
+//            Thread.sleep(100);
+//        }
+//        System.out.println(Json.encode(bookMyFuture.getResult()));
     }
 
     @Override
