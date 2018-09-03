@@ -400,7 +400,7 @@ public class NetworkClient implements KafkaClient {
      * connection if all existing connections are in use. This method will never choose a node for which there is no
      * existing connection and from which we have disconnected within the reconnect backoff period.
      *
-     * 选择负载最小的节点
+     * 选择负载最小的节点（通过in-flight的数量）
      *
      * @return The node with the fewest in-flight requests.
      */
@@ -416,9 +416,10 @@ public class NetworkClient implements KafkaClient {
             int idx = (offset + i) % nodes.size();
             Node node = nodes.get(idx);
             int currInflight = this.inFlightRequests.inFlightRequestCount(node.idString());
-            if (currInflight == 0 && this.connectionStates.isConnected(node.idString())) {
+            if (currInflight == 0 && this.connectionStates.isConnected(node.idString())) {// 如果发现一个inFlight == 0的，并保持连接的
                 // if we find an established connection with no in-flight requests we can stop right away
                 return node;
+
             } else if (!this.connectionStates.isBlackedOut(node.idString(), now) && currInflight < inflight) {
                 // otherwise if this is the best we have found so far, record that
                 inflight = currInflight;

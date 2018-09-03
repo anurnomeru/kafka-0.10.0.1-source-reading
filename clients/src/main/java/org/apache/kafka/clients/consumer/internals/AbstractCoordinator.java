@@ -224,8 +224,8 @@ public abstract class AbstractCoordinator implements Closeable {
     public void ensureCoordinatorReady() {
         while (coordinatorUnknown()) {// 是否需要重新查找GroupCoordinator，主要检查coordinator字段是否为空，以及与GroupCoordinator
             // 之间的连接是否正常
-            RequestFuture<Void> future = sendGroupCoordinatorRequest();
-            client.poll(future);
+            RequestFuture<Void> future = sendGroupCoordinatorRequest();// 创建并缓存请求
+            client.poll(future);// 阻塞地发送请求
 
             if (future.failed()) {
                 if (future.isRetriable()) {
@@ -234,6 +234,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     throw future.exception();
                 }
             } else if (coordinator != null && client.connectionFailed(coordinator)) {
+                // 如果Coordinator 依旧为null，并且client连接Coordinator节点失败，这里sleep一段时间，然后继续查找Coordinator
                 // we found the coordinator, but the connection has failed, so mark
                 // it dead and backoff before retrying discovery
                 coordinatorDead();
@@ -569,6 +570,8 @@ public abstract class AbstractCoordinator implements Closeable {
             // create a group  metadata request
             log.debug("Sending coordinator request for group {} to broker {}", groupId, node);
             GroupCoordinatorRequest metadataRequest = new GroupCoordinatorRequest(this.groupId);
+
+            // 实际上就是将请求先缓冲到consumerNetworkClient，
             return client.send(node, ApiKeys.GROUP_COORDINATOR, metadataRequest)
                          .compose(new RequestFutureAdapter<ClientResponse, Void>() {
 
@@ -585,6 +588,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
         if (!coordinatorUnknown()) {
             // We already found the coordinator, so ignore the request
+            // 已经找到协调器了，所以不需要呼应这个request
             future.complete(null);
         } else {
             GroupCoordinatorResponse groupCoordinatorResponse = new GroupCoordinatorResponse(resp.responseBody());

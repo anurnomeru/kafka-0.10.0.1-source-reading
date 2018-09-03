@@ -149,7 +149,7 @@ public class ConsumerNetworkClient implements Closeable {
 
     /**
      * Block until the metadata has been refreshed.
-     * 阻塞知道metadata更新
+     * 阻塞直到metadata更新
      */
     public void awaitMetadataUpdate() {
         int version = this.metadata.requestUpdate();
