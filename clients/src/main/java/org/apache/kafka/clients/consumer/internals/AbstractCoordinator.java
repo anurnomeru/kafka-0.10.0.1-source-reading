@@ -595,6 +595,8 @@ public abstract class AbstractCoordinator implements Closeable {
             // use MAX_VALUE - node.id as the coordinator id to mimic separate connections
             // for the coordinator in the underlying network client layer
             // TODO: this needs to be better handled in KAFKA-1935
+
+            // 使用 MAX_VALUE - node.id 作为Coordinator id ，在底层网络客户端层来为Coordinator模拟独立的连接
             Errors error = Errors.forCode(groupCoordinatorResponse.errorCode());
             if (error == Errors.NONE) {
                 this.coordinator = new Node(Integer.MAX_VALUE - groupCoordinatorResponse.node()
@@ -610,7 +612,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
                 // start sending heartbeats only if we have a valid generation
                 if (generation > 0) {
-                    heartbeatTask.reset();
+                    heartbeatTask.reset();// 启动心跳任务.. todo 还没看
                 }
                 future.complete(null);
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
