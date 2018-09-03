@@ -14,6 +14,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 /**
  * A helper class for managing the heartbeat to the coordinator
+ * 一个为Coordinator管理心跳的辅助类
  */
 public final class Heartbeat {
     private final long timeout;
@@ -51,6 +52,7 @@ public final class Heartbeat {
     }
 
     public long timeToNextHeartbeat(long now) {
+        // 现在距离最后一次心跳
         long timeSinceLastHeartbeat = now - Math.max(lastHeartbeatSend, lastSessionReset);
 
         if (timeSinceLastHeartbeat > interval)

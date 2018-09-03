@@ -12,6 +12,13 @@
  */
 package org.apache.kafka.clients;
 
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.network.NetworkReceive;
@@ -31,14 +38,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
 
 /**
  * A network client for asynchronous request/response network i/o. This is an internal class used to implement the
@@ -246,7 +245,6 @@ public class NetworkClient implements KafkaClient {
     /**
      * Queue up the given request for sending. Requests can only be sent out to ready nodes.
      *
-     *
      * @param request The request
      * @param now The current timestamp
      */
@@ -389,16 +387,26 @@ public class NetworkClient implements KafkaClient {
         this.selector.close();
     }
 
+    public static void main(String[] args) {
+        int i = 10;
+        for (int j = 0; j < i; j++) {
+            System.out.println((j + 5) % i);
+        }
+    }
+
     /**
      * Choose the node with the fewest outstanding requests which is at least eligible for connection. This method will
      * prefer a node with an existing connection, but will potentially choose a node for which we don't yet have a
      * connection if all existing connections are in use. This method will never choose a node for which there is no
      * existing connection and from which we have disconnected within the reconnect backoff period.
      *
+     * 选择负载最小的节点
+     *
      * @return The node with the fewest in-flight requests.
      */
     @Override
     public Node leastLoadedNode(long now) {
+        // 从metadataUpdater获取所有节点
         List<Node> nodes = this.metadataUpdater.fetchNodes();
         int inflight = Integer.MAX_VALUE;
         Node found = null;

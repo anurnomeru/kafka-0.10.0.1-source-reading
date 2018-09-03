@@ -57,6 +57,8 @@ import org.slf4j.LoggerFactory;
 
 /**
  * This class manages the coordination process with the consumer coordinator.
+ *
+ * 这个类管理着consumer 协调器的协调过程
  */
 public final class ConsumerCoordinator extends AbstractCoordinator {
 

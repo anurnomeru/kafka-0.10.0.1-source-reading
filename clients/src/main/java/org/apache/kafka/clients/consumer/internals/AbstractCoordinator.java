@@ -219,9 +219,11 @@ public abstract class AbstractCoordinator implements Closeable {
 
     /**
      * Block until the coordinator for this group is known and is ready to receive requests.
+     * 直到协调器为这个组所知并且准备好接收请求都会阻塞
      */
     public void ensureCoordinatorReady() {
-        while (coordinatorUnknown()) {
+        while (coordinatorUnknown()) {// 是否需要重新查找GroupCoordinator，主要检查coordinator字段是否为空，以及与GroupCoordinator
+            // 之间的连接是否正常
             RequestFuture<Void> future = sendGroupCoordinatorRequest();
             client.poll(future);
 
@@ -347,28 +349,42 @@ public abstract class AbstractCoordinator implements Closeable {
                 return;
             }
 
-            // 是否需要发送心跳包
+            // 是否需要发送心跳包（有可能因为reset了的原因，导致需要另择时机重新发送）
             if (!heartbeat.shouldHeartbeat(now)) {// 不需发送
                 // we don't need to heartbeat now, so reschedule for when we do
                 // 现在不需要发送心跳包，所以重新schedule一下
                 client.schedule(this, now + heartbeat.timeToNextHeartbeat(now));
             } else {// 需发送
                 heartbeat.sentHeartbeat(now);
+                // 请求在路上
                 requestInFlight = true;
 
                 // 发送心跳请求
                 RequestFuture<Void> future = sendHeartbeatRequest();
+
+                // 为适配后的 RequestFuture<心跳> 添加监听
                 future.addListener(new RequestFutureListener<Void>() {
 
                     @Override
+                    /**
+                     * 这个succeeded 并不是在请求成功后调用，而是在
+                     * 请求成功后，然后 {@link HeartbeatCompletionHandler#handle)}
+                     * 处理error码，确认无问题后才调用
+                     */
                     public void onSuccess(Void value) {
-                        requestInFlight = false;
+                        requestInFlight = false;// 代表已经拿到了返回包
                         long now = time.milliseconds();
-                        heartbeat.receiveHeartbeat(now);
+                        heartbeat.receiveHeartbeat(now);// 标记最后一次接受心跳是现在
+
+                        // 下次心跳包 = 现在 +
                         long nextHeartbeatTime = now + heartbeat.timeToNextHeartbeat(now);
                         client.schedule(HeartbeatTask.this, nextHeartbeatTime);
                     }
 
+                    /**
+                     * 同理
+                     * @param e
+                     */
                     @Override
                     public void onFailure(RuntimeException e) {
                         requestInFlight = false;
@@ -534,11 +550,16 @@ public abstract class AbstractCoordinator implements Closeable {
      * Discover the current coordinator for the group. Sends a GroupMetadata request to
      * one of the brokers. The returned future should be polled to get the result of the request.
      *
+     * 为group查找coordinator，发送一个GroupMetadata到其中一个broker，返回的future应该
+     * 被polled来获取request的结果
+     *
      * @return A request future which indicates the completion of the metadata request
      */
     private RequestFuture<Void> sendGroupCoordinatorRequest() {
         // initiate the group metadata request
         // find a node to ask about the coordinator
+        // 初始化 group metadata 请求
+        // 找出一个节点来与Coordinator通信
         Node node = this.client.leastLoadedNode();
         if (node == null) {
             // TODO: If there are no brokers left, perhaps we should use the bootstrap set
@@ -619,6 +640,7 @@ public abstract class AbstractCoordinator implements Closeable {
     /**
      * Mark the current coordinator as dead.
      * 将Coordinator标记为死亡，实际上就是将ConsumerNetworkClient中相应的nodeId标记为失败
+     * 并将coordinator字段设置为null
      */
     protected void coordinatorDead() {
         if (this.coordinator != null) {
@@ -699,10 +721,15 @@ public abstract class AbstractCoordinator implements Closeable {
      */
     public RequestFuture<Void> sendHeartbeatRequest() {
         HeartbeatRequest req = new HeartbeatRequest(this.groupId, this.generation, this.memberId);
+
         return client.send(coordinator, ApiKeys.HEARTBEAT, req)
                      .compose(new HeartbeatCompletionHandler());
     }
 
+    /**
+     * 这个适配器并没有做什么特殊的逻辑处理，只是判断请求成功或者失败（失败的各种类型）来进行各种补偿操作，
+     * 比如重新加入消费组之类的。
+     */
     private class HeartbeatCompletionHandler extends CoordinatorResponseHandler<HeartbeatResponse/* 从这个 */, Void/* 到这个 */> {
 
         // 原 client.send(coordinator, ApiKeys.HEARTBEAT, req) 会返回的对象。
@@ -781,8 +808,7 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
-    protected abstract class CoordinatorResponseHandler<R, T>
-        extends RequestFutureAdapter<ClientResponse, T> {
+    protected abstract class CoordinatorResponseHandler<R, T> extends RequestFutureAdapter<ClientResponse, T> {
 
         protected ClientResponse response;
 
