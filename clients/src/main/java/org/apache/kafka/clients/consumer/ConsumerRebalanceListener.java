@@ -13,7 +13,6 @@
 package org.apache.kafka.clients.consumer;
 
 import java.util.Collection;
-
 import org.apache.kafka.common.TopicPartition;
 
 /**
@@ -75,30 +74,43 @@ import org.apache.kafka.common.TopicPartition;
 public interface ConsumerRebalanceListener {
 
     /**
+     * 调用时机是Consumer停止拉去数据之后、rebalance开始之前，我们可以在此方法中实现手动提交offset，来避免Rebalance导致重复消费
+     *
      * A callback method the user can implement to provide handling of offset commits to a customized store on the start
      * of a rebalance operation. This method will be called before a rebalance operation starts and after the consumer
      * stops fetching data. It is recommended that offsets should be committed in this callback to either Kafka or a
      * custom offset store to prevent duplicate data.
+     *
+     * 用户可以实现的回调方法，用于rebalance开始时提供对自定义存储的偏移量提交的处理。这个方法会在rebalance之前和consumer停止拉取之后调用
+     * 建议offsets应该在这个回调中提交到kafka或自定义offset存储；来预防消息重复。
+     *
      * <p>
      * For examples on usage of this API, see Usage Examples section of {@link KafkaConsumer KafkaConsumer}
      * <p>
      * <b>NOTE:</b> This method is only called before rebalances. It is not called prior to {@link KafkaConsumer#close()}.
+     * // 注意这个方法不会比{@link KafkaConsumer#close()}.更优先
      *
      * @param partitions The list of partitions that were assigned to the consumer on the last rebalance
      */
     public void onPartitionsRevoked(Collection<TopicPartition> partitions);
 
     /**
+     * 调用时机是Rebalance完成之后，Consumer开始拉取数据之前，我们可以在此方法中调整或自定义offset的值
+     *
      * A callback method the user can implement to provide handling of customized offsets on completion of a successful
      * partition re-assignment. This method will be called after an offset re-assignment completes and before the
      * consumer starts fetching data.
+     *
+     * 在分区重分配成功之后，用户可以实现这个回调方法来提供对自定义offset的处理。这个方法将会在Rebalance完成之后，
+     * consumer开始拉取数据之前调用
+     *
      * <p>
      * It is guaranteed that all the processes in a consumer group will execute their
      * {@link #onPartitionsRevoked(Collection)} callback before any instance executes its
      * {@link #onPartitionsAssigned(Collection)} callback.
      *
      * @param partitions The list of partitions that are now assigned to the consumer (may include partitions previously
-     *            assigned to the consumer)
+     * assigned to the consumer)
      */
     public void onPartitionsAssigned(Collection<TopicPartition> partitions);
 }

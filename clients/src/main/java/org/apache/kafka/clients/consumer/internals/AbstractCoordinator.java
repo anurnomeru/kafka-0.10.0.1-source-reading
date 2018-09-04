@@ -186,6 +186,8 @@ public abstract class AbstractCoordinator implements Closeable {
      * Invoked prior to each group join or rejoin. This is typically used to perform any
      * cleanup from the previous generation (such as committing offsets for the consumer)
      *
+     * 优先调用每个组的join或rejoin。这代表性地用来从之前的世代进行任何cleanup操作（比如为消费者提交offset）。
+     *
      * @param generation The previous generation or -1 if there was none
      * @param memberId The identifier of this member in the previous group or "" if there was none
      */
@@ -256,9 +258,10 @@ public abstract class AbstractCoordinator implements Closeable {
 
     /**
      * Ensure that the group is active (i.e. joined and synced)
+     * 确保group是有效的
      */
     public void ensureActiveGroup() {
-        if (!needRejoin()) {
+        if (!needRejoin()) { // 不需要重新加入组
             return;
         }
 

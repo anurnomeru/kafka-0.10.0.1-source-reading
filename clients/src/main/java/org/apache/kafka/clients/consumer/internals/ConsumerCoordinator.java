@@ -337,7 +337,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     @Override
     protected void onJoinPrepare(int generation, String memberId) {
         // commit offsets prior to rebalance if auto-commit enabled
-        maybeAutoCommitOffsetsSync();
+        // 在 auto-commit 开启的情况下，commit offsets 比 rebalance 优先
+        maybeAutoCommitOffsetsSync();// 进行一次同步提交offset
 
         // execute the user's callback before rebalance
         ConsumerRebalanceListener listener = subscriptions.listener();
@@ -409,6 +410,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     /**
      * Ensure that we have a valid partition assignment from the coordinator.
+     * 确保我们从Coordinator获取了拥有有效的partition分配
      */
     public void ensurePartitionAssignment() {
         if (subscriptions.partitionsAutoAssigned()) {
@@ -418,8 +420,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             // track of the fact that we need to rebalance again to reflect the change to the topic subscription. Without
             // ensuring that the metadata is fresh, any metadata update that changes the topic subscriptions and arrives with a
             // rebalance in progress will essentially be ignored. See KAFKA-3949 for the complete description of the problem.
-            if (subscriptions.hasPatternSubscription()) {
-                client.ensureFreshMetadata();
+
+            // 基于初始化获取metadata与初始化Rebalance的竞态条件，我们需要确保在进行初始化时，metadata是新的，然后
+            // 请求metadata的更新。如果在rebalance还在等待时metadata的更新抵达了（比如，加入group的操作依旧inflight），
+            // 我们将会丢失真实的踪迹？，所以我们需要再次rebalance来反应topic订阅情况的改变。在没有确保metadata是新鲜的之前，
+            // 任何改变topic订阅以及在rebalance时到来的metadata更新将会被忽略。完整表述这个问题，可以看看 KAFKA-3949
+
+            if (subscriptions.hasPatternSubscription()) {// SubscriptionType.AUTO_PATTERN 正则匹配
+                client.ensureFreshMetadata();// 防止因为使用过期的Metadata进行Rebalance而导致多次连续的Rebalance
             }
 
             ensureActiveGroup();
@@ -549,7 +557,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private void maybeAutoCommitOffsetsSync() {
-        if (autoCommitEnabled) {
+        if (autoCommitEnabled) {// 如果开启了自动提交
             try {
                 commitOffsetsSync(subscriptions.allConsumed());
             } catch (WakeupException e) {
