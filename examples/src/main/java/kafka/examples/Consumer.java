@@ -29,6 +29,15 @@ public class Consumer extends ShutdownableThread {
     private final KafkaConsumer<Integer, String> consumer;
     private final String topic;
 
+    @Override
+    public void doWork() {
+        consumer.subscribe(Collections.singletonList(this.topic));
+        ConsumerRecords<Integer, String> records = consumer.poll(1000);
+        for (ConsumerRecord<Integer, String> record : records) {
+            System.out.println("Received message: (" + record.key() + ", " + record.value() + ") at offset " + record.offset());
+        }
+    }
+
     public Consumer(String topic) {
         super("KafkaConsumerExample", false);
         Properties props = new Properties();
@@ -42,15 +51,6 @@ public class Consumer extends ShutdownableThread {
 
         consumer = new KafkaConsumer<>(props);
         this.topic = topic;
-    }
-
-    @Override
-    public void doWork() {
-        consumer.subscribe(Collections.singletonList(this.topic));
-        ConsumerRecords<Integer, String> records = consumer.poll(1000);
-        for (ConsumerRecord<Integer, String> record : records) {
-            System.out.println("Received message: (" + record.key() + ", " + record.value() + ") at offset " + record.offset());
-        }
     }
 
     @Override

@@ -360,7 +360,7 @@ public final class RecordAccumulator {
         long nextReadyCheckDelayMs = Long.MAX_VALUE;
         boolean unknownLeadersExist = false;
 
-        // 大于零代表没有线程在阻塞等待bufferPool （其实也不一定吼）
+        // 大于零代表有线程在阻塞等待bufferPool
         boolean exhausted = this.free.queued() > 0;
         for (Map.Entry<TopicPartition, Deque<RecordBatch>> entry : this.batches.entrySet()) {
             TopicPartition part = entry.getKey();

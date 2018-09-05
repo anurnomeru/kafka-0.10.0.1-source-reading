@@ -12,13 +12,6 @@
  */
 package org.apache.kafka.common.config;
 
-import org.apache.kafka.common.Configurable;
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.common.utils.Utils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -26,6 +19,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A convenient base class for configurations to extend.
@@ -49,13 +48,15 @@ public class AbstractConfig {
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals, boolean doLog) {
         /* check that all the keys are really strings */
         for (Object key : originals.keySet())
-            if (!(key instanceof String))
+            if (!(key instanceof String)) {
                 throw new ConfigException(key.toString(), originals.get(key), "Key must be a string.");
+            }
         this.originals = (Map<String, ?>) originals;
         this.values = definition.parse(this.originals);
         this.used = Collections.synchronizedSet(new HashSet<String>());
-        if (doLog)
+        if (doLog) {
             logAll();
+        }
     }
 
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals) {
@@ -69,8 +70,9 @@ public class AbstractConfig {
     }
 
     protected Object get(String key) {
-        if (!values.containsKey(key))
+        if (!values.containsKey(key)) {
             throw new ConfigException(String.format("Unknown configuration '%s'", key));
+        }
         used.add(key);
         return values.get(key);
     }
@@ -130,15 +132,19 @@ public class AbstractConfig {
 
     /**
      * Get all the original settings, ensuring that all values are of type String.
+     *
      * @return the original settings
      * @throws ClassCastException if any of the values are not strings
      */
     public Map<String, String> originalsStrings() {
         Map<String, String> copy = new RecordingMap<>();
         for (Map.Entry<String, ?> entry : originals.entrySet()) {
-            if (!(entry.getValue() instanceof String))
+            if (!(entry.getValue() instanceof String)) {
                 throw new ClassCastException("Non-string value found in original settings for key " + entry.getKey() +
-                        ": " + (entry.getValue() == null ? null : entry.getValue().getClass().getName()));
+                    ": " + (entry.getValue() == null ? null : entry.getValue()
+                                                                   .getClass()
+                                                                   .getName()));
+            }
             copy.put(entry.getKey(), (String) entry.getValue());
         }
         return copy;
@@ -148,13 +154,18 @@ public class AbstractConfig {
      * Gets all original settings with the given prefix, stripping the prefix before adding it to the output.
      *
      * @param prefix the prefix to use as a filter
+     *
      * @return a Map containing the settings with the prefix
      */
     public Map<String, Object> originalsWithPrefix(String prefix) {
         Map<String, Object> result = new RecordingMap<>();
         for (Map.Entry<String, ?> entry : originals.entrySet()) {
-            if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length())
-                result.put(entry.getKey().substring(prefix.length()), entry.getValue());
+            if (entry.getKey()
+                     .startsWith(prefix) && entry.getKey()
+                                                 .length() > prefix.length()) {
+                result.put(entry.getKey()
+                                .substring(prefix.length()), entry.getValue());
+            }
         }
         return result;
     }
@@ -192,19 +203,32 @@ public class AbstractConfig {
      *
      * @param key The configuration key for the class
      * @param t The interface the class should implement
+     *
      * @return A configured instance of the class
      */
     public <T> T getConfiguredInstance(String key, Class<T> t) {
         Class<?> c = getClass(key);
-        if (c == null)
+        if (c == null) {
             return null;
+        }
         Object o = Utils.newInstance(c);
-        if (!t.isInstance(o))
+        if (!t.isInstance(o)) {
             throw new KafkaException(c.getName() + " is not an instance of " + t.getName());
-        if (o instanceof Configurable)
+        }
+        if (o instanceof Configurable) {
             ((Configurable) o).configure(this.originals);
+        }
         return t.cast(o);
     }
+
+//    public static void main(String[] args) {
+    //        Properties properties = new Properties();
+    //        properties.put("test", "a,b,c,d");
+    //        List<String> klasses = (List<String>) properties.get("test");
+    //        for (String klass : klasses) {
+    //            System.out.println(klass);
+    //        }
+    //    }
 
     /**
      * Get a list of configured instances of the given class specified by the given configuration key. The configuration
@@ -216,13 +240,15 @@ public class AbstractConfig {
      *
      * @param key The configuration key for the class
      * @param t The interface the class should implement
+     *
      * @return The list of configured instances
      */
     public <T> List<T> getConfiguredInstances(String key, Class<T> t) {
         List<String> klasses = getList(key);
         List<T> objects = new ArrayList<T>();
-        if (klasses == null)
+        if (klasses == null) {
             return objects;
+        }
         for (String klass : klasses) {
             Object o;
             try {
@@ -230,10 +256,12 @@ public class AbstractConfig {
             } catch (ClassNotFoundException e) {
                 throw new KafkaException(klass + " ClassNotFoundException exception occured", e);
             }
-            if (!t.isInstance(o))
+            if (!t.isInstance(o)) {
                 throw new KafkaException(klass + " is not an instance of " + t.getName());
-            if (o instanceof Configurable)
+            }
+            if (o instanceof Configurable) {
                 ((Configurable) o).configure(this.originals);
+            }
             objects.add(t.cast(o));
         }
         return objects;
@@ -241,8 +269,12 @@ public class AbstractConfig {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
 
         AbstractConfig that = (AbstractConfig) o;
 
@@ -260,7 +292,8 @@ public class AbstractConfig {
      */
     private class RecordingMap<V> extends HashMap<String, V> {
 
-        RecordingMap() {}
+        RecordingMap() {
+        }
 
         RecordingMap(Map<String, ? extends V> m) {
             super(m);
@@ -268,8 +301,9 @@ public class AbstractConfig {
 
         @Override
         public V get(Object key) {
-            if (key instanceof String)
+            if (key instanceof String) {
                 ignore((String) key);
+            }
             return super.get(key);
         }
     }
