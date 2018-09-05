@@ -29,6 +29,13 @@ public class Producer extends Thread {
     private final String topic;
     private final Boolean isAsync;
 
+    public static void main(String[] args) {
+        Producer producer = new Producer("myTest",false);
+        producer.run();
+//        Consumer consumerThread = new Consumer("myTest");
+//        consumerThread.start();
+    }
+
     public Producer(String topic, Boolean isAsync) {
         Properties props = new Properties();
         props.put("bootstrap.servers", "localhost:9092");
