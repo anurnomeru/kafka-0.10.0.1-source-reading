@@ -159,6 +159,15 @@ public class ConsumerNetworkClient implements Closeable {
     }
 
     /**
+     * Wakeup an active poll. This will cause the polling thread to throw an exception either
+     * on the current poll if one is active, or the next poll.
+     */
+    public void wakeup() {
+        this.wakeup.set(true);
+        this.client.wakeup();
+    }
+
+    /**
      * Ensure our metadata is fresh (if an update is expected, this will block
      * until it has completed).
      */
@@ -166,15 +175,6 @@ public class ConsumerNetworkClient implements Closeable {
         if (this.metadata.updateRequested() || this.metadata.timeToNextUpdate(time.milliseconds()) == 0) {
             awaitMetadataUpdate();
         }
-    }
-
-    /**
-     * Wakeup an active poll. This will cause the polling thread to throw an exception either
-     * on the current poll if one is active, or the next poll.
-     */
-    public void wakeup() {
-        this.wakeup.set(true);
-        this.client.wakeup();
     }
 
     /**
