@@ -350,7 +350,6 @@ public class Sender implements Runnable {
             }
 
             // tell the user the result of their request
-            // todo ????
             batch.done(baseOffset, timestamp, exception);
             // 释放空间
             this.accumulator.deallocate(batch);

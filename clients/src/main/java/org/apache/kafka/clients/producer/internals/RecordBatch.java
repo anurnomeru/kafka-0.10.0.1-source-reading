@@ -97,7 +97,6 @@ public final class RecordBatch {
                 key == null ? -1 : key.length,
                 value == null ? -1 : value.length);
 
-            // TODO：待看，看起来是将返回的future与回调放在一起了
             if (callback != null) {
                 thunks.add(new Thunk(callback, future));
             }

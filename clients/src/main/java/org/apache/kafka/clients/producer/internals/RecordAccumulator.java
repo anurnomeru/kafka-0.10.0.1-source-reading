@@ -227,7 +227,7 @@ public final class RecordAccumulator {
                 RecordAppendResult appendResult = tryAppend(timestamp, key, value, callback, dq);
                 if (appendResult != null) {
                     // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen often...
-                    // 什么东西可能找我们要这个batch，返回我们等待的这个，希望这种情况不会经常发生
+                    // 可能某个线程为我们初始化了一个batch
                     free.deallocate(buffer);
                     return appendResult;
                 }

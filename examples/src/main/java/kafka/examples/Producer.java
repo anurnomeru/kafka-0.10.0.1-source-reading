@@ -6,7 +6,7 @@
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,24 +16,26 @@
  */
 package kafka.examples;
 
+import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 
-import java.util.Properties;
-import java.util.concurrent.ExecutionException;
-
 public class Producer extends Thread {
+
     private final KafkaProducer<Integer, String> producer;
+
     private final String topic;
+
     private final Boolean isAsync;
 
     public static void main(String[] args) {
-        Producer producer = new Producer("myTest",false);
+        Producer producer = new Producer("myTest", true);
         producer.run();
-//        Consumer consumerThread = new Consumer("myTest");
-//        consumerThread.start();
+        //        Consumer consumerThread = new Consumer("myTest");
+        //        consumerThread.start();
     }
 
     public Producer(String topic, Boolean isAsync) {
@@ -49,6 +51,7 @@ public class Producer extends Thread {
 
     public void run() {
         int messageNo = 1;
+
         while (true) {
             String messageStr = "Message_" + messageNo;
             long startTime = System.currentTimeMillis();
@@ -60,7 +63,8 @@ public class Producer extends Thread {
                 try {
                     producer.send(new ProducerRecord<>(topic,
                         messageNo,
-                        messageStr)).get();
+                        messageStr))
+                            .get();
                     System.out.println("Sent message: (" + messageNo + ", " + messageStr + ")");
                 } catch (InterruptedException | ExecutionException e) {
                     e.printStackTrace();
@@ -74,7 +78,9 @@ public class Producer extends Thread {
 class DemoCallBack implements Callback {
 
     private final long startTime;
+
     private final int key;
+
     private final String message;
 
     public DemoCallBack(long startTime, int key, String message) {
