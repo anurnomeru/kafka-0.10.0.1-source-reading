@@ -20,7 +20,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import org.apache.kafka.clients.producer.Partitioner;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.PartitionInfo;
@@ -52,6 +51,7 @@ public class DefaultPartitioner implements Partitioner {
      * 这个方法在以后可能会改，改了后将导致分区的选择与现存的消息分区不兼容
      *
      * @param number a given number
+     *
      * @return a positive number.
      */
     private static int toPositive(int number) {
@@ -59,9 +59,15 @@ public class DefaultPartitioner implements Partitioner {
     }
 
     public static void main(String[] args) {
-          AtomicInteger counter = new AtomicInteger(-2);
-        System.out.println(counter);
-        System.out.println(toPositive(counter.incrementAndGet()));
+
+        System.out.println(-5%2);
+
+        AtomicInteger counter = new AtomicInteger(-2);
+        for (int i = 0; i < 5; i++) {
+            System.out.println(counter);
+            System.out.println(toPositive(counter.incrementAndGet()));
+            System.out.println("==========");
+        }
     }
 
     public void configure(Map<String, ?> configs) {

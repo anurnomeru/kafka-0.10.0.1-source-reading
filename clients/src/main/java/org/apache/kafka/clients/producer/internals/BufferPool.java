@@ -96,7 +96,7 @@ public final class BufferPool {
      * Allocate a buffer of the given size. This method blocks if there is not enough memory and the buffer pool
      * is configured with blocking mode.
      *
-     * 分配一块指定大小的buffer，当内有足够内存时，这个方法会阻塞，缓冲pool可以配置阻塞模式。
+     * 分配一块指定大小的buffer，当没有足够内存时，这个方法会阻塞，缓冲pool可以配置阻塞模式。
      *
      * @param size The buffer size to allocate in bytes
      * @param maxTimeToBlockMs The maximum time in milliseconds to block for buffer memory to be available
