@@ -155,8 +155,8 @@ public class MemoryRecords implements Records {
     public void close() {
         if (writable) {
             // close the compressor to fill-in wrapper message metadata if necessary
-            compressor.close();
 
+            compressor.close();
             // flip the underlying buffer to be ready for reads
             // flip 基础buffer来供读
             buffer = compressor.buffer();

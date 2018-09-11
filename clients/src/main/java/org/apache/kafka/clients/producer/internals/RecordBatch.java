@@ -53,7 +53,7 @@ public final class RecordBatch {
 
     public long lastAppendTime;// 最后一次追加消息的时间
 
-    private final List<Thunk> thunks;// ？？？
+    private final List<Thunk> thunks;// 发送时的callback
 
     private long offsetCounter = 0L;
 
@@ -81,8 +81,8 @@ public final class RecordBatch {
         if (!this.records.hasRoomFor(key, value)) {
             return null;
         } else {
-            // 将消息与offset添加到buffer中，返回crc校验值
             long checksum = this.records.append(offsetCounter++, timestamp, key, value);
+            // 将消息与offset添加到buffer中，返回crc校验值
 
             // TODO：为什么要这样？
             this.maxRecordSize = Math.max(this.maxRecordSize, Record.recordSize(key, value));

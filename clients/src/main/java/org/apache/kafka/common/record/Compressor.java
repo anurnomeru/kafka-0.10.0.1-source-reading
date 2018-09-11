@@ -234,6 +234,9 @@ public class Compressor {
         return numRecords;
     }
 
+    /**
+     * 如果没有指定压缩，返回buffer的position
+     */
     public long estimatedBytesWritten() {
         if (type == CompressionType.NONE) {
             return bufferStream.buffer().position();

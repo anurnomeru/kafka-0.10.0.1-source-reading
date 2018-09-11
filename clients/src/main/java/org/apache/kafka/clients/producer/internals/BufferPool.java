@@ -22,7 +22,6 @@ import java.util.Deque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
-
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Metrics;
@@ -136,7 +135,6 @@ public final class BufferPool {
                 this.availableMemory -= size;
                 lock.unlock();
                 return ByteBuffer.allocate(size);
-
             } else {// 现在可用的内存大小无法满足
                 // we are out of memory and will have to block
                 // 需要的内存可能会导致溢出，所以需要阻塞
