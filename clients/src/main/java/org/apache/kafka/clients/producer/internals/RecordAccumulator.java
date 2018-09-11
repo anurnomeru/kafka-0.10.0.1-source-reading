@@ -215,8 +215,6 @@ public final class RecordAccumulator {
             ByteBuffer buffer = free.allocate(size, maxTimeToBlock);// 没申请到会抛出异常
             synchronized (dq) {
 
-                // ================================ 看不懂为什么又append一次
-
                 // 获得dq的锁以后，需要去检查生产者是否已经关闭了，
                 // Need to check if producer is closed again after grabbing the dequeue lock.
                 if (closed) {
@@ -239,7 +237,8 @@ public final class RecordAccumulator {
 
                 dq.addLast(batch);
                 incomplete.add(batch);
-                return new RecordAppendResult(future, dq.size() > 1 || batch.records.isFull(), true);
+                return new RecordAppendResult(future, dq.size() > 1
+                    || batch.records.isFull()/* 可能这个消息太大了 */, true);
             }
         } finally {
             appendsInProgress.decrementAndGet();
