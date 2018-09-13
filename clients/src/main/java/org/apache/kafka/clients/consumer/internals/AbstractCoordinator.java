@@ -266,7 +266,10 @@ public abstract class AbstractCoordinator implements Closeable {
         }
 
         if (needsJoinPrepare) {
-            onJoinPrepare(generation, memberId);
+            onJoinPrepare(generation, memberId);// 这个准备会做三件事
+            // 1、如果开启了自动提交offset则会进行同步提交offset（可能阻塞）
+            // 2、调用 Subscription 中ConsumerRebalance中ConsumerRebalance中的回调方法
+            // 3、设置needsPartitionAssignment 为true，收缩groupSubscription集合
             needsJoinPrepare = false;
         }
 

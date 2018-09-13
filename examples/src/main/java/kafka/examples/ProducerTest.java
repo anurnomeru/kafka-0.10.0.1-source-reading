@@ -36,8 +36,8 @@ public class ProducerTest extends Thread {
     public static void main(String[] args) {
         ProducerTest producer = new ProducerTest("myTest", false);
         producer.run();
-//                Consumer consumerThread = new Consumer("myTest");
-//        consumerThread.start();
+        //                Consumer consumerThread = new Consumer("myTest");
+        //        consumerThread.start();
 
     }
 
@@ -61,11 +61,6 @@ public class ProducerTest extends Thread {
             String message = String.valueOf(messageNo);
             long startTime = System.currentTimeMillis();
             if (isAsync) { // Send asynchronously
-                try {
-                    Thread.sleep(10000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
                 producer.send(new ProducerRecord<>(topic,
                     messageNo,
                     message), new DemoCallBackInt(startTime, messageNo, message));

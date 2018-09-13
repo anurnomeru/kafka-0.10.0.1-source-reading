@@ -556,6 +556,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
             // batch满了或者创建了新的batch，就去唤醒sender
             if (result.batchIsFull || result.newBatchCreated) {
+                System.out.println("kafka开始run他的wakeup了！！！！！！！！！！！！");
                 log.trace("Waking up the sender since topic {} partition {} is either full or getting a new batch", record.topic(), partition);
                 this.sender.wakeup();
             }

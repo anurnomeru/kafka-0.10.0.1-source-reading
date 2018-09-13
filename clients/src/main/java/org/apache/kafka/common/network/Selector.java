@@ -31,11 +31,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -279,6 +278,7 @@ public class Selector implements Selectable {
      */
     @Override
     public void wakeup() {
+        System.out.println("唤醒了nioSelector");
         this.nioSelector.wakeup();
     }
 
@@ -378,14 +378,21 @@ public class Selector implements Selectable {
         long startSelect = time.nanoseconds();
 
         // readyKeys 已经准备好了的 SelectionKey 的数量
+        long start = System.currentTimeMillis();
         int readyKeys = select(timeout);// 等待I/O事件发生
+        long end = System.currentTimeMillis();
+        System.out.println("Select 耗时：" + (end - start));
+
         long endSelect = time.nanoseconds();
         currentTimeNanos = endSelect;
 
         this.sensors.selectTime.record(endSelect - startSelect, time.milliseconds());// TODO:??????? 应该是个统计
 
         if (readyKeys > 0 || !immediatelyConnectedKeys.isEmpty()) {
-            pollSelectionKeys(this.nioSelector.selectedKeys(), false);// 处理I/O的核心方法
+            // 这个会阻塞很久吗？
+            Set<SelectionKey> sets = this.nioSelector.selectedKeys();
+
+            pollSelectionKeys(sets, false);// 处理I/O的核心方法
             pollSelectionKeys(immediatelyConnectedKeys, true);
         }
 

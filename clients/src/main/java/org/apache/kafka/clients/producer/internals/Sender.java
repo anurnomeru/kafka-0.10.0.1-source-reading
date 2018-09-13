@@ -170,7 +170,6 @@ public class Sender implements Runnable {
      * @param now The current POSIX time in milliseconds
      */
     void run(long now) {
-        System.out.println("kafka开始run他的发送了！！！！！！！！！！！！");
 
         /** 1、从metadata获取元数据 */
         Cluster cluster = metadata.fetch();
@@ -376,7 +375,7 @@ public class Sender implements Runnable {
     /**
      * Transfer the record batches into a list of produce requests on a per-node basis
      */
-    private List<ClientRequest> createProduceRequests(Map<Integer, List<RecordBatch>> collated, long now) {
+    private List<ClientRequest> createProduceRequests(Map<Integer/* nodeId */, List<RecordBatch>> collated, long now) {
         List<ClientRequest> requests = new ArrayList<ClientRequest>(collated.size());
         for (Map.Entry<Integer, List<RecordBatch>> entry : collated.entrySet())
 
