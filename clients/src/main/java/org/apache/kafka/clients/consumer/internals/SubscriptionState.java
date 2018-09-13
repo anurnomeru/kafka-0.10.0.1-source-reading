@@ -196,7 +196,7 @@ public class SubscriptionState {
 
     /**
      * 这里的场景比较复杂，调用这里将needsPartitionAssignment设置为true，
-     * 主要是因为在某些请求响应中出现了 ILLEGAL_GENERATION等异常，或者
+     * 主要是因为在某些请求响应中出现了 ILLEGAL_GENERATION 等异常，或者
      * 订阅的Topic出现了分区数量的变化
      *
      * 将组中其他订阅的topic删除，只留自己的

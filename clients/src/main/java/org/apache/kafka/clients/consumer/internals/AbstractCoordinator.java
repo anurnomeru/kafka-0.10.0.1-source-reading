@@ -428,15 +428,35 @@ public abstract class AbstractCoordinator implements Closeable {
                      .compose(new JoinGroupResponseHandler());
     }
 
-    private class JoinGroupResponseHandler extends CoordinatorResponseHandler<JoinGroupResponse, ByteBuffer> {
+    private class JoinGroupResponseHandler extends RequestFutureAdapter<ClientResponse, ByteBuffer> {
 
-        @Override
+        private ClientResponse response;
+
+        public void onFailure(RuntimeException e, RequestFuture<ByteBuffer> future) {
+            // mark the coordinator as dead
+            if (e instanceof DisconnectException) {
+                coordinatorDead();
+            }
+            future.raise(e);
+        }
+
+        public void onSuccess(ClientResponse clientResponse, RequestFuture<ByteBuffer> future) {
+            try {
+                this.response = clientResponse;
+                JoinGroupResponse responseObj = parse(clientResponse);
+                handle(responseObj, future);
+            } catch (RuntimeException e) {
+                if (!future.isDone()) {
+                    future.raise(e);
+                }
+            }
+        }
+
         public JoinGroupResponse parse(ClientResponse response) {
             return new JoinGroupResponse(response.responseBody());
         }
 
-        @Override
-        public void handle(JoinGroupResponse joinResponse, RequestFuture<ByteBuffer> future) {
+        public void handle(JoinGroupResponse joinResponse, RequestFuture<ByteBuffer> future/* sendJoinGroupRequest#joinGroupFuture */) {
             Errors error = Errors.forCode(joinResponse.errorCode());
             if (error == Errors.NONE) {
                 log.debug("Received successful join group response for group {}: {}", groupId, joinResponse.toStruct());
