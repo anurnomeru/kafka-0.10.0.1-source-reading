@@ -75,6 +75,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     /** subscriptionState对象 */
     private final SubscriptionState subscriptions;
 
+    /** 提交offset回调 */
     private final OffsetCommitCallback defaultOffsetCommitCallback;
 
     /** 是否开启了自动提交 */
@@ -334,6 +335,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return groupAssignment;
     }
 
+    /**
+     * 1、如果开启了自动提交offset则会进行同步提交offset（可能阻塞）
+     * 2、调用 Subscription 中ConsumerRebalance中ConsumerRebalance中的回调方法
+     * 3、设置needsPartitionAssignment 为true，收缩groupSubscription集合
+     */
     @Override
     protected void onJoinPrepare(int generation, String memberId) {
         // commit offsets prior to rebalance if auto-commit enabled
@@ -413,7 +419,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * 确保我们从Coordinator获取了拥有有效的partition分配
      */
     public void ensurePartitionAssignment() {
-        if (subscriptions.partitionsAutoAssigned()) {
+        if (subscriptions.partitionsAutoAssigned()) {// SubscriptionType.AUTO_TOPICS 或 SubscriptionType.AUTO_PATTERN;
+
             // Due to a race condition between the initial metadata fetch and the initial rebalance, we need to ensure that
             // the metadata is fresh before joining initially, and then request the metadata update. If metadata update arrives
             // while the rebalance is still pending (for example, when the join group is still inflight), then we will lose
@@ -426,7 +433,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             // 我们将会丢失真实的踪迹？，所以我们需要再次rebalance来反应topic订阅情况的改变。在没有确保metadata是新鲜的之前，
             // 任何改变topic订阅以及在rebalance时到来的metadata更新将会被忽略。完整表述这个问题，可以看看 KAFKA-3949
 
-            if (subscriptions.hasPatternSubscription()) {// SubscriptionType.AUTO_PATTERN 正则匹配
+            if (subscriptions.hasPatternSubscription()) {// SubscriptionType.AUTO_PATTERN
                 client.ensureFreshMetadata();// 防止因为使用过期的Metadata进行Rebalance而导致多次连续的Rebalance
             }
 

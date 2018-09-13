@@ -34,8 +34,6 @@ public class Producer extends Thread {
     public static void main(String[] args) {
         Producer producer = new Producer("myTest", true);
         producer.run();
-        //        Consumer consumerThread = new Consumer("myTest");
-        //        consumerThread.start();
     }
 
     public Producer(String topic, Boolean isAsync) {

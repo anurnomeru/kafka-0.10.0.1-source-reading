@@ -278,7 +278,6 @@ public class Selector implements Selectable {
      */
     @Override
     public void wakeup() {
-        System.out.println("唤醒了nioSelector");
         this.nioSelector.wakeup();
     }
 
@@ -378,10 +377,7 @@ public class Selector implements Selectable {
         long startSelect = time.nanoseconds();
 
         // readyKeys 已经准备好了的 SelectionKey 的数量
-        long start = System.currentTimeMillis();
         int readyKeys = select(timeout);// 等待I/O事件发生
-        long end = System.currentTimeMillis();
-        System.out.println("Select 耗时：" + (end - start));
 
         long endSelect = time.nanoseconds();
         currentTimeNanos = endSelect;

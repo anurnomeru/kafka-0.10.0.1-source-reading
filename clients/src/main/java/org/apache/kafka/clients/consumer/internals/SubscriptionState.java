@@ -363,6 +363,9 @@ public class SubscriptionState {
         return fetchable;
     }
 
+    /**
+     * SubscriptionType.AUTO_TOPICS 或 SubscriptionType.AUTO_PATTERN;
+     */
     public boolean partitionsAutoAssigned() {
         return this.subscriptionType == SubscriptionType.AUTO_TOPICS || this.subscriptionType == SubscriptionType.AUTO_PATTERN;
     }
