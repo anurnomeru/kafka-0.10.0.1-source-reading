@@ -283,6 +283,16 @@ public abstract class AbstractCoordinator implements Closeable {
                 continue;
             }
 
+            // 1、在sendJoinGroupRequest()，首先发送一个 client 请求，将其compose成 RequestFuture<ByteBuffer> futureJoin
+            // 在 client 成功后，会调用 onSuccess，触发 JoinGroupResponseHandler 的onSuccess
+            //
+            // 2、###### 在 JoinGroupResponseHandler 的处理中，会去chain这个 futureJoin
+            //
+            // 3、来到了SyncGroupResponseHandler，发送一个新的 client 请求，将其compose成 RequestFuture<ByteBuffer> futureSync，在这个client成功后，会调用 onSuccess，触发 SyncGroupResponseHandler 的onSuccess
+            //
+            // 4、在 SyncGroupResponseHandler的处理中，如果正确返回，触发之前chain这个的 futrueJoin，才是真正的成功了
+            //
+            // 5、在最外面，我们给 futrueJoin 添加了监听器。
             RequestFuture<ByteBuffer> future = sendJoinGroupRequest();
             future.addListener(new RequestFutureListener<ByteBuffer>() {
 
