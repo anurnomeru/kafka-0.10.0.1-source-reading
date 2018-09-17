@@ -6,7 +6,7 @@
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,18 +16,30 @@
  */
 package kafka.examples;
 
-import kafka.utils.ShutdownableThread;
+import java.util.Collections;
+import java.util.Properties;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-
-import java.util.Collections;
-import java.util.Properties;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
+import kafka.utils.ShutdownableThread;
 
 public class Consumer extends ShutdownableThread {
+
     private final KafkaConsumer<Integer, String> consumer;
+
     private final String topic;
+
+    public static void main(String[] args) {
+        StringSerializer serializer = new StringSerializer();
+        StringDeserializer deserializer = new StringDeserializer();
+
+        System.out.println(deserializer.deserialize("", serializer.serialize("", "测试测试测试")));
+
+        System.out.println(StringDeserializer.class.getName());
+    }
 
     @Override
     public void doWork() {
@@ -47,7 +59,7 @@ public class Consumer extends ShutdownableThread {
         props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, "1000");
         props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "30000");
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.IntegerDeserializer");
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringDeserializer");
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
 
         consumer = new KafkaConsumer<>(props);
         this.topic = topic;
