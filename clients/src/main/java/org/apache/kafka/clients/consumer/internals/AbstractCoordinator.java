@@ -478,7 +478,9 @@ public abstract class AbstractCoordinator implements Closeable {
                 AbstractCoordinator.this.rejoinNeeded = false;
                 AbstractCoordinator.this.protocol = joinResponse.groupProtocol();
                 sensors.joinLatency.record(response.requestLatencyMs());
-                if (joinResponse.isLeader()) {
+                if (joinResponse.isLeader()) {// 判断是否为leader节点，比较leader节点与自己
+                    // 这个传进去的future是sendJoinGroupRequest后的joinGroupFuture
+                    // 当onJoinLeader方法完成后，再通知这个future
                     onJoinLeader(joinResponse).chain(future);
                 } else {
                     onJoinFollower().chain(future);
