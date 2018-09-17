@@ -13,6 +13,7 @@
 package org.apache.kafka.common.network;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.channels.CancelledKeyException;
@@ -483,8 +484,12 @@ public class Selector implements Selectable {
         }
     }
 
-    public static void main(String[] args) {
-
+    public static void main(String[] args) throws UnsupportedEncodingException {
+        String s = "测试";
+        byte[] bytes = s.getBytes();
+        for (byte aByte : bytes) {
+            System.out.println(aByte);
+        }
     }
 
     @Override
