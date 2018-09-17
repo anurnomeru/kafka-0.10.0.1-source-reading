@@ -292,7 +292,7 @@ public abstract class AbstractCoordinator implements Closeable {
             //
             // 4、在 SyncGroupResponseHandler的处理中，如果正确返回，触发之前chain这个的 futrueJoin，才是真正的成功了
             //
-            // 5、在最外面，我们给 futrueJoin 添加了监听器。
+            // 5、成功后，调用了我们给 futrueJoin 添加的监听器。
             RequestFuture<ByteBuffer> future = sendJoinGroupRequest();
             future.addListener(new RequestFutureListener<ByteBuffer>() {
 
@@ -311,6 +311,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     // after having been woken up, the exception is ignored and we will rejoin
                 }
             });
+
             client.poll(future);
 
             if (future.failed()) {

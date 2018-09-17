@@ -483,6 +483,10 @@ public class Selector implements Selectable {
         }
     }
 
+    public static void main(String[] args) {
+
+    }
+
     @Override
     public List<Send> completedSends() {
         return this.completedSends;

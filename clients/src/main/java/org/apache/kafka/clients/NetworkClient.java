@@ -387,13 +387,6 @@ public class NetworkClient implements KafkaClient {
         this.selector.close();
     }
 
-    public static void main(String[] args) {
-        int i = 10;
-        for (int j = 0; j < i; j++) {
-            System.out.println((j + 5) % i);
-        }
-    }
-
     /**
      * Choose the node with the fewest outstanding requests which is at least eligible for connection. This method will
      * prefer a node with an existing connection, but will potentially choose a node for which we don't yet have a
@@ -419,7 +412,6 @@ public class NetworkClient implements KafkaClient {
             if (currInflight == 0 && this.connectionStates.isConnected(node.idString())) {// 如果发现一个inFlight == 0的，并保持连接的
                 // if we find an established connection with no in-flight requests we can stop right away
                 return node;
-
             } else if (!this.connectionStates.isBlackedOut(node.idString(), now) && currInflight < inflight) {
                 // otherwise if this is the best we have found so far, record that
                 inflight = currInflight;
@@ -517,7 +509,6 @@ public class NetworkClient implements KafkaClient {
     private void handleCompletedReceives(List<ClientResponse> responses, long now) {
         for (NetworkReceive receive : this.selector.completedReceives()) {
 
-            // todo ???
             String source = receive.source();
             ClientRequest req = inFlightRequests.completeNext(source);
 
