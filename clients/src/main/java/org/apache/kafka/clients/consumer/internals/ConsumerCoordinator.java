@@ -334,6 +334,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         // execute the user's callback after rebalance
+        // 执行用户的基于Rebalance后的回调
         ConsumerRebalanceListener listener = subscriptions.listener();
         log.info("Setting newly assigned partitions {} for group {}", subscriptions.assignedPartitions(), groupId);
         try {
