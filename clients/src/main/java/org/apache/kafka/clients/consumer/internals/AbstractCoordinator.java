@@ -274,7 +274,7 @@ public abstract class AbstractCoordinator implements Closeable {
         }
 
         while (needRejoin()) {
-            ensureCoordinatorReady();
+            ensureCoordinatorReady();// rebalance操作的第一步，查找GroupCoordinator，这个阶段会在kafka集群中的任意一个Broker发送GroupCoordinatorRequest请求，并处理返回的GroupCoordinatorResponse
 
             // ensure that there are no pending requests to the coordinator. This is important
             // in particular to avoid resending a pending JoinGroup request.

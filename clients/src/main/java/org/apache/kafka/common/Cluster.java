@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.Utils;
 
 /**
  * A representation of a subset of the nodes, topics, and partitions in the Kafka cluster.
+ * 包含了 kafka 集群中的 nodes、topics、partitions
  */
 public final class Cluster {
 
@@ -46,6 +47,7 @@ public final class Cluster {
 
     /**
      * Create a new cluster with the given nodes and partitions
+     *
      * @param nodes The nodes in the cluster
      * @param partitions Information about a subset of the topic-partitions this cluster hosts
      */
@@ -125,7 +127,9 @@ public final class Cluster {
 
     /**
      * Create a "bootstrap" cluster using the given list of host/ports
+     *
      * @param addresses The addresses
+     *
      * @return A cluster for these hosts/ports
      */
     public static Cluster bootstrap(List<InetSocketAddress> addresses) {
@@ -154,7 +158,9 @@ public final class Cluster {
 
     /**
      * Get the node by the node id (or null if no such node exists)
+     *
      * @param id The id of the node
+     *
      * @return The node, or null if no such node exists
      */
     public Node nodeById(int id) {
@@ -163,7 +169,9 @@ public final class Cluster {
 
     /**
      * Get the current leader for the given topic-partition
+     *
      * @param topicPartition The topic and partition we want to know the leader for
+     *
      * @return The node that is the leader for this topic-partition, or null if there is currently no leader
      */
     public Node leaderFor(TopicPartition topicPartition) {
@@ -177,7 +185,9 @@ public final class Cluster {
 
     /**
      * Get the metadata for the specified partition
+     *
      * @param topicPartition The topic and partition to fetch info for
+     *
      * @return The metadata about the given topic and partition
      */
     public PartitionInfo partition(TopicPartition topicPartition) {
@@ -186,7 +196,9 @@ public final class Cluster {
 
     /**
      * Get the list of partitions for this topic
+     *
      * @param topic The topic name
+     *
      * @return A list of partitions
      */
     public List<PartitionInfo> partitionsForTopic(String topic) {
@@ -195,7 +207,9 @@ public final class Cluster {
 
     /**
      * Get the list of available partitions for this topic
+     *
      * @param topic The topic name
+     *
      * @return A list of partitions
      */
     public List<PartitionInfo> availablePartitionsForTopic(String topic) {
@@ -204,7 +218,9 @@ public final class Cluster {
 
     /**
      * Get the list of partitions whose leader is this node
+     *
      * @param nodeId The node id
+     *
      * @return A list of partitions
      */
     public List<PartitionInfo> partitionsForNode(int nodeId) {
@@ -216,6 +232,7 @@ public final class Cluster {
      * 获取相应topic的分区数
      *
      * @param topic The topic to get the number of partitions for
+     *
      * @return The number of partitions or null if there is no corresponding metadata
      */
     public Integer partitionCountForTopic(String topic) {
@@ -225,6 +242,7 @@ public final class Cluster {
 
     /**
      * Get all topics.
+     *
      * @return a set of all topics
      */
     public Set<String> topics() {

@@ -296,28 +296,37 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     protected Map<String, ByteBuffer> performAssignment(String leaderId,
         String assignmentStrategy,
         Map<String, ByteBuffer> allSubscriptions) {
+
+        // leader会根据分配策略来获取assignor
         PartitionAssignor assignor = lookupAssignor(assignmentStrategy);
         if (assignor == null) {
             throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
         }
 
-        Set<String> allSubscribedTopics = new HashSet<>();
+        Set<String> allSubscribedTopics = new HashSet<>();// 所有订阅的主题
         Map<String, Subscription> subscriptions = new HashMap<>();
+
+        /**
+         * 这里是将byteBuffer反序列化出来，变成 Map<String, Subscription>
+         */
         for (Map.Entry<String, ByteBuffer> subscriptionEntry : allSubscriptions.entrySet()) {
-            Subscription subscription = ConsumerProtocol.deserializeSubscription(subscriptionEntry.getValue());
+            Subscription subscription = ConsumerProtocol.deserializeSubscription(subscriptionEntry.getValue());// 反序列化一下
             subscriptions.put(subscriptionEntry.getKey(), subscription);
             allSubscribedTopics.addAll(subscription.topics());
         }
 
         // the leader will begin watching for changes to any of the topics the group is interested in,
         // which ensures that all metadata changes will eventually be seen
-        this.subscriptions.groupSubscribe(allSubscribedTopics);
-        metadata.setTopics(this.subscriptions.groupSubscription());
+
+        // leader将会开始监控组内订阅topics的改变，来确保所有的metadata变化都最终将被发现
+        this.subscriptions.groupSubscribe(allSubscribedTopics);// 所有topic都扔进groupSubscription
+        metadata.setTopics(this.subscriptions.groupSubscription());// 同时更新一下元数据里面的订阅信息
 
         // update metadata (if needed) and keep track of the metadata used for assignment so that
         // we can check after rebalance completion whether anything has changed
+        // 更新metadata并且保持跟踪元数据来进行分配，所以我们在rebalance后检查一下有没有什么东西改变了
         client.ensureFreshMetadata();
-        assignmentSnapshot = metadataSnapshot;
+        assignmentSnapshot = metadataSnapshot;// 分配的快照等同于现在元数据的快照
 
         log.debug("Performing assignment for group {} using strategy {} with subscriptions {}",
             groupId, assignor.name(), subscriptions);
