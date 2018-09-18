@@ -52,7 +52,7 @@ public interface PartitionAssignor {
      * @return A map from the members to their respective assignment. This should have one entry
      *         for all members who in the input subscription map.
      */
-    Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions);
+    Map<String/* memberId */, Assignment>  assign(Cluster metadata, Map<String, Subscription> subscriptions);
 
 
     /**

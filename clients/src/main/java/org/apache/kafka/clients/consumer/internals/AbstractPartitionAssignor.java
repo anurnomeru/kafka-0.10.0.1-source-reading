@@ -45,7 +45,7 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
      *
      * @return Map from each member to the list of partitions assigned to them.
      */
-    public abstract Map<String, List<TopicPartition>> assign(Map<String/* topic */, Integer> partitionsPerTopic,
+    public abstract Map<String/* memberId */, List<TopicPartition>> assign(Map<String/* topic */, Integer> partitionsPerTopic,
         Map<String/* memberId */, List<String/* topic */>> subscriptions);
 
     @Override
@@ -54,11 +54,12 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
     }
 
     @Override
-    public Map<String, Assignment> assign(Cluster metadata, Map<String/* memberId */, Subscription/* 包含它关注了那些 topic */> subscriptions) {
+    public Map<String/* memberId */, Assignment> assign(Cluster metadata, Map<String/* memberId */, Subscription/* 包含它关注了那些 topic */> subscriptions) {
         // 所有订阅的Topic
         Set<String> allSubscribedTopics = new HashSet<>();
 
         // 目前来看topicSubscriptions就是把subscriptions里面的TopicList取出来了，然后把userData去掉了
+        // 为什么怎么说，因为Subscription里面还有一个userData()
         Map<String/* memberId */, List<String/* topic */>> topicSubscriptions = new HashMap<>();
 
         for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
@@ -80,12 +81,12 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
         }
 
         // 将分区分配的逻辑委托给了assign重载，子类可自由实现
-        Map<String, List<TopicPartition>> rawAssignments = assign(partitionsPerTopic, topicSubscriptions);
+        Map<String/* memberId */, List<TopicPartition>> rawAssignments = assign(partitionsPerTopic, topicSubscriptions);
 
         // this class has maintains no user data, so just wrap the results
         // 这个类不维护 user data，所以只是包装一下结果
-        Map<String, Assignment> assignments = new HashMap<>();
-        for (Map.Entry<String, List<TopicPartition>> assignmentEntry : rawAssignments.entrySet())
+        Map<String/* memberId */, Assignment> assignments = new HashMap<>();
+        for (Map.Entry<String/* memberId */, List<TopicPartition>> assignmentEntry : rawAssignments.entrySet())
             assignments.put(assignmentEntry.getKey(), new Assignment(assignmentEntry.getValue()));
         return assignments;
     }

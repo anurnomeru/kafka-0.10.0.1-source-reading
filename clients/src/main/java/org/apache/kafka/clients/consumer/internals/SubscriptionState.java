@@ -235,7 +235,7 @@ public class SubscriptionState {
     }
 
     /**
-     * 成功饿到SyncGroupResponse中的分区分配结果时进行的操作，此时ReBalance操作结束，所以将needsPartitionAssignment = false
+     * 成功到SyncGroupResponse中的分区分配结果时进行的操作，此时ReBalance操作结束，所以将needsPartitionAssignment = false
      *
      * Change the assignment to the specified partitions returned from the coordinator,
      * note this is different from {@link #assignFromUser(Collection)} which directly set the assignment from user inputs

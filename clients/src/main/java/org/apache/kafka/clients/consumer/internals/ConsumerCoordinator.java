@@ -245,54 +245,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     @Override
-    protected void onJoinComplete(int generation,
-        String memberId,
-        String assignmentStrategy,
-        ByteBuffer assignmentBuffer) {
-        // if we were the assignor, then we need to make sure that there have been no metadata updates
-        // since the rebalance begin. Otherwise, we won't rebalance again until the next metadata change
-        if (assignmentSnapshot != null && !assignmentSnapshot.equals(metadataSnapshot)) {
-            subscriptions.needReassignment();
-            return;
-        }
-
-        PartitionAssignor assignor = lookupAssignor(assignmentStrategy);
-        if (assignor == null) {
-            throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
-        }
-
-        Assignment assignment = ConsumerProtocol.deserializeAssignment(assignmentBuffer);
-
-        // set the flag to refresh last committed offsets
-        subscriptions.needRefreshCommits();
-
-        // update partition assignment
-        subscriptions.assignFromSubscribed(assignment.partitions());
-
-        // give the assignor a chance to update internal state based on the received assignment
-        assignor.onAssignment(assignment);
-
-        // reschedule the auto commit starting from now
-        if (autoCommitEnabled) {
-            autoCommitTask.reschedule();
-        }
-
-        // execute the user's callback after rebalance
-        ConsumerRebalanceListener listener = subscriptions.listener();
-        log.info("Setting newly assigned partitions {} for group {}", subscriptions.assignedPartitions(), groupId);
-        try {
-            Set<TopicPartition> assigned = new HashSet<>(subscriptions.assignedPartitions());
-            listener.onPartitionsAssigned(assigned);
-        } catch (WakeupException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("User provided listener {} for group {} failed on partition assignment",
-                listener.getClass()
-                        .getName(), groupId, e);
-        }
-    }
-
-    @Override
     protected Map<String, ByteBuffer> performAssignment(String leaderId,
         String assignmentStrategy,
         Map<String/* memberId */, ByteBuffer/* 包含它关注了那些 topic */> allSubscriptions) {
@@ -332,7 +284,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             groupId, assignor.name(), subscriptions);
 
         // todo 核心Rebalance后，topic下分区的分配方法
-        Map<String, Assignment> assignment = assignor.assign(metadata.fetch(), subscriptions);
+        Map<String/* memberId */, Assignment> assignment = assignor.assign(metadata.fetch(), subscriptions);
 
         log.debug("Finished assignment for group {}: {}", groupId, assignment);
 
@@ -343,6 +295,57 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         return groupAssignment;
+    }
+
+    @Override
+    protected void onJoinComplete(int generation,
+        String memberId,
+        String assignmentStrategy,
+        ByteBuffer assignmentBuffer) {
+        // if we were the assignor, then we need to make sure that there have been no metadata updates
+        // since the rebalance begin. Otherwise, we won't rebalance again until the next metadata change
+        if (assignmentSnapshot != null && !assignmentSnapshot.equals(metadataSnapshot)) {
+            subscriptions.needReassignment();
+            return;
+        }
+
+        PartitionAssignor assignor = lookupAssignor(assignmentStrategy);
+        if (assignor == null) {
+            throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
+        }
+
+        Assignment assignment = ConsumerProtocol.deserializeAssignment(assignmentBuffer);
+
+        // set the flag to refresh last committed offsets
+        // 标记一下，用于更新最后一次offsets
+        subscriptions.needRefreshCommits();
+
+        // update partition assignment
+        // 更新一下分区分配情况
+        subscriptions.assignFromSubscribed(assignment.partitions());
+
+        // give the assignor a chance to update internal state based on the received assignment
+        // 给予分配器一个机会来基于收到的分配情况来更新内部状态
+        assignor.onAssignment(assignment);
+
+        // reschedule the auto commit starting from now
+        if (autoCommitEnabled) {
+            autoCommitTask.reschedule();
+        }
+
+        // execute the user's callback after rebalance
+        ConsumerRebalanceListener listener = subscriptions.listener();
+        log.info("Setting newly assigned partitions {} for group {}", subscriptions.assignedPartitions(), groupId);
+        try {
+            Set<TopicPartition> assigned = new HashSet<>(subscriptions.assignedPartitions());
+            listener.onPartitionsAssigned(assigned);
+        } catch (WakeupException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("User provided listener {} for group {} failed on partition assignment",
+                listener.getClass()
+                        .getName(), groupId, e);
+        }
     }
 
     /**

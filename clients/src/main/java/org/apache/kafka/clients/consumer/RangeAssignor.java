@@ -66,17 +66,18 @@ public class RangeAssignor extends AbstractPartitionAssignor {
      * @param subscriptions memberId 与各自 topic subscription 的映射
      */
     @Override
-    public Map<String, List<TopicPartition>> assign(Map<String/* topic */, Integer> partitionsPerTopic,
+    public Map<String/* memberId */, List<TopicPartition>> assign(Map<String/* topic */, Integer> partitionsPerTopic,
         Map<String/* memberId */, List<String/* topic */>> subscriptions) {
 
         // 将原本的 member订阅了哪几个topic，转换为topic 被哪几个member订阅了 topicPerConsumer => consumerPerTopic
         Map<String/* topic */, List<String/* memberId */>> consumersPerTopic = consumersPerTopic(subscriptions);
 
-        // 为每个 topic new一个空的TopicPartition订阅集合
+        // 为每个 member new一个空的TopicPartition订阅集合
         Map<String/* memberId */, List<TopicPartition>> assignment = new HashMap<>();
         for (String memberId : subscriptions.keySet())
             assignment.put(memberId, new ArrayList<TopicPartition>());
 
+        // 开始分配
         for (Map.Entry<String, List<String>> topicEntry : consumersPerTopic.entrySet()) {
             String topic = topicEntry.getKey();
             List<String/* memberId */> consumersForTopic = topicEntry.getValue();

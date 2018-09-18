@@ -532,6 +532,7 @@ public abstract class AbstractCoordinator implements Closeable {
             Map<String, ByteBuffer> groupAssignment = performAssignment(joinResponse.leaderId(), joinResponse.groupProtocol(),
                 joinResponse.members());
 
+            // 将分配好的组进行同步
             SyncGroupRequest request = new SyncGroupRequest(groupId, generation, memberId, groupAssignment);
             log.debug("Sending leader SyncGroup for group {} to coordinator {}: {}", groupId, this.coordinator, request);
             return sendSyncGroupRequest(request);
