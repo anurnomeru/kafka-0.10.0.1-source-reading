@@ -527,6 +527,8 @@ public abstract class AbstractCoordinator implements Closeable {
     private RequestFuture<ByteBuffer> onJoinLeader(JoinGroupResponse joinResponse) {
         try {
             // perform the leader synchronization and send back the assignment for the group
+
+            // joinResponse.members : Map<String/* memberId */, ByteBuffer/* 包含它关注了那些 topic */>
             Map<String, ByteBuffer> groupAssignment = performAssignment(joinResponse.leaderId(), joinResponse.groupProtocol(),
                 joinResponse.members());
 

@@ -295,7 +295,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     @Override
     protected Map<String, ByteBuffer> performAssignment(String leaderId,
         String assignmentStrategy,
-        Map<String, ByteBuffer> allSubscriptions) {
+        Map<String/* memberId */, ByteBuffer/* 包含它关注了那些 topic */> allSubscriptions) {
 
         // leader会根据分配策略来获取assignor
         PartitionAssignor assignor = lookupAssignor(assignmentStrategy);
@@ -304,7 +304,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         Set<String> allSubscribedTopics = new HashSet<>();// 所有订阅的主题
-        Map<String, Subscription> subscriptions = new HashMap<>();
+        Map<String/* memberId */, Subscription/* 包含它关注了那些 topic */> subscriptions = new HashMap<>();
 
         /**
          * 这里是将byteBuffer反序列化出来，变成 Map<String, Subscription>
@@ -331,6 +331,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         log.debug("Performing assignment for group {} using strategy {} with subscriptions {}",
             groupId, assignor.name(), subscriptions);
 
+        // todo 核心Rebalance后，topic下分区的分配方法
         Map<String, Assignment> assignment = assignor.assign(metadata.fetch(), subscriptions);
 
         log.debug("Finished assignment for group {}: {}", groupId, assignment);

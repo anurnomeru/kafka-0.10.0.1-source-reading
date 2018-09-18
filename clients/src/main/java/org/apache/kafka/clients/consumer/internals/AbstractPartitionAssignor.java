@@ -54,12 +54,12 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
     }
 
     @Override
-    public Map<String, Assignment> assign(Cluster metadata, Map<String/* topic */, Subscription> subscriptions) {
+    public Map<String, Assignment> assign(Cluster metadata, Map<String/* memberId */, Subscription/* 包含它关注了那些 topic */> subscriptions) {
         // 所有订阅的Topic
         Set<String> allSubscribedTopics = new HashSet<>();
 
         // 目前来看topicSubscriptions就是把subscriptions里面的TopicList取出来了，然后把userData去掉了
-        Map<String, List<String>> topicSubscriptions = new HashMap<>();
+        Map<String/* memberId */, List<String/* topic */>> topicSubscriptions = new HashMap<>();
 
         for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
             List<String> topics = subscriptionEntry.getValue()
