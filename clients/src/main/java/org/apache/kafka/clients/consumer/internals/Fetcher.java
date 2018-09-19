@@ -299,6 +299,8 @@ public class Fetcher<K, V> {
             return Collections.emptyMap();
         } else {
             Map<TopicPartition, List<ConsumerRecord<K, V>>> drained = new HashMap<>();
+            // 取的消息全部放在这里面
+
             int recordsRemaining = maxPollRecords;// 一次最多只能取这么多条消息
             Iterator<CompletedFetch> completedFetchesIterator = completedFetches.iterator();
 
@@ -341,9 +343,12 @@ public class Fetcher<K, V> {
                 log.debug("Not returning fetched records for assigned partition {} since it is no longer fetchable", partitionRecords.partition);
             } else if (partitionRecords.fetchOffset == position) {
                 // we are ensured to have at least one record since we already checked for emptiness
-                // 确保至少有一个消息，因为我们准备校验
-                List<ConsumerRecord<K, V>> partRecords = partitionRecords.take(maxRecords);
-                long nextOffset = partRecords.get(partRecords.size() - 1)
+                // 确保至少有一个消息，因为我们准备校验emptiness？？空虚
+                // partRecords 里面装满了fetch下来的消息
+                List<ConsumerRecord<K, V>> partRecords = partitionRecords.take(maxRecords);// 获取消息集合，最多max个
+
+                // 获取最后一个消息的offset
+                long nextOffset = partRecords.get(partRecords.size() - 1)// 获取最后一个消息，然后拿它的offset+1
                                              .offset() + 1;
 
                 log.trace("Returning fetched records at offset {} for assigned partition {} and update " +
