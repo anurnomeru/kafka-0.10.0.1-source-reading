@@ -386,18 +386,19 @@ public class Fetcher<K, V> {
     public void updateFetchPositions(Set<TopicPartition> partitions) {
         // reset the fetch position to the committed position
         for (TopicPartition tp : partitions) {
-            if (!subscriptions.isAssigned(tp) || subscriptions.isFetchable(tp)) {
+            if (!subscriptions.isAssigned(tp) || subscriptions.isFetchable(tp)) {// 没分配或者没暂停之类的才能update
                 continue;
             }
 
             // TODO: If there are several offsets to reset, we could submit offset requests in parallel
-            if (subscriptions.isOffsetResetNeeded(tp)) {
+            if (subscriptions.isOffsetResetNeeded(tp)) {// resetStrategy != null; 重设策略不为空
                 resetOffset(tp);
             } else if (subscriptions.committed(tp) == null) {
                 // there's no committed position, so we need to reset with the default strategy
                 subscriptions.needOffsetReset(tp);
                 resetOffset(tp);
             } else {
+                // 如果没有重置策略则简单将commit设置为offset
                 long committed = subscriptions.committed(tp)
                                               .offset();
                 log.debug("Resetting offset for partition {} to the committed offset {}", tp, committed);
@@ -519,6 +520,8 @@ public class Fetcher<K, V> {
     /**
      * Reset offsets for the given partition using the offset reset strategy.
      *
+     * 根据offset的重置策略来重置offset
+     *
      * @param partition The given partition that needs reset offset
      *
      * @throws org.apache.kafka.clients.consumer.NoOffsetForPartitionException If no offset reset strategy is defined
@@ -536,6 +539,8 @@ public class Fetcher<K, V> {
 
         log.debug("Resetting offset for partition {} to {} offset.", partition, strategy.name()
                                                                                         .toLowerCase(Locale.ROOT));
+
+        // listOffset 方法中实现了对OffsetsRequest的发送和OffsetsResponse的处理，与前面介绍的其他请求类似
         long offset = listOffset(partition, timestamp);
 
         // we might lose the assignment while fetching the offset, so check it is still active
@@ -575,6 +580,8 @@ public class Fetcher<K, V> {
 
     /**
      * Fetch a single offset before the given timestamp for the partition.
+     *
+     * fetch 当前分区于 timestamp 之前的offset
      *
      * @param topicPartition The partition that needs fetching offset.
      * @param timestamp The timestamp for fetching offset.
