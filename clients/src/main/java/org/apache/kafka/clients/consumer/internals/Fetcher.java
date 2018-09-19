@@ -591,15 +591,19 @@ public class Fetcher<K, V> {
     private RequestFuture<Long> sendListOffsetRequest(final TopicPartition topicPartition, long timestamp) {
         Map<TopicPartition, ListOffsetRequest.PartitionData> partitions = new HashMap<>(1);
         partitions.put(topicPartition, new ListOffsetRequest.PartitionData(timestamp, 1));
+
+        // 从元数据获取某个topic下的partitionInfo
         PartitionInfo info = metadata.fetch()
                                      .partition(topicPartition);
+
+        // 如果元数据没有对应分区信息
         if (info == null) {
-            metadata.add(topicPartition.topic());
+            metadata.add(topicPartition.topic());// 加到里面去，待更新
             log.debug("Partition {} is unknown for fetching offset, wait for metadata refresh", topicPartition);
-            return RequestFuture.staleMetadata();
-        } else if (info.leader() == null) {
+            return RequestFuture.staleMetadata();// 表示过期的元数据
+        } else if (info.leader() == null) {// 如果没有选主，或者没有拉取到leader的数据
             log.debug("Leader for partition {} unavailable for fetching offset, wait for metadata refresh", topicPartition);
-            return RequestFuture.leaderNotAvailable();
+            return RequestFuture.leaderNotAvailable();// 表示
         } else {
             Node node = info.leader();
             ListOffsetRequest request = new ListOffsetRequest(-1, partitions);

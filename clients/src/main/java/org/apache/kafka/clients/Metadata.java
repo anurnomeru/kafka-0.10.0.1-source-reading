@@ -58,7 +58,7 @@ public final class Metadata {
 
     private boolean needUpdate;
 
-    private final Set<String> topics;
+    private final Set<String> topics;// 更新topic元数据，是根据这个topic来的
 
     // 监听元数据更新的监听器合计，自定义元数据监听，需要实现Metadata.Listener.onMetadataUpdate()，在更新集群信息之前
     // 会通知listener集合中全部的listener对象
