@@ -430,6 +430,9 @@ public class SubscriptionState {
         return missing;
     }
 
+    /**
+     * 需要Rebalance
+     */
     public boolean partitionAssignmentNeeded() {
         return this.needsPartitionAssignment;
     }

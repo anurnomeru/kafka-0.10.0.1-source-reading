@@ -18,7 +18,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.Iterator;
-
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.AbstractIterator;
 
@@ -245,6 +244,9 @@ public class MemoryRecords implements Records {
         return writable;
     }
 
+    /**
+     * todo ： 第四章会讲这个
+     */
     public static class RecordsIterator extends AbstractIterator<LogEntry> {
 
         private final ByteBuffer buffer;
