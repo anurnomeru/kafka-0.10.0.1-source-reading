@@ -70,6 +70,9 @@ import java.util.Set;
  * This class manage the fetching process with the brokers.
  *
  * 这个类管理消息拉取
+ *
+ *
+ * todo 不是很懂！！
  */
 public class Fetcher<K, V> {
 
@@ -125,6 +128,8 @@ public class Fetcher<K, V> {
     /**
      * Set-up a fetch request for any node that we have assigned partitions for which doesn't already have
      * an in-flight fetch or pending fetch data.
+     *
+     * 将response封装成CompletedFetch加到completedFetches
      */
     public void sendFetches() {
         Map<Node, FetchRequest> fetchRequests = createFetchRequests();
@@ -141,8 +146,11 @@ public class Fetcher<K, V> {
 
                             for (Map.Entry<TopicPartition, FetchResponse.PartitionData> entry : response.responseData().entrySet()) {
                                 TopicPartition partition = entry.getKey();
-                                long fetchOffset = request.fetchData().get(partition).offset;
                                 FetchResponse.PartitionData fetchData = entry.getValue();
+
+                                // 这个是原来的offset（提交时的那个）
+                                // 也就是 long position = this.subscriptions.position(partition);
+                                long fetchOffset = request.fetchData().get(partition).offset;
                                 completedFetches.add(new CompletedFetch(partition, fetchOffset, fetchData, metricAggregator));
                             }
 
@@ -156,6 +164,102 @@ public class Fetcher<K, V> {
                         }
                     });
         }
+    }
+
+    /**
+     * The callback for fetch completion
+     */
+    private PartitionRecords<K, V> parseFetchedData(CompletedFetch completedFetch) {
+        // 喵喵喵
+        TopicPartition tp = completedFetch.partition;
+
+        // （sendFetch）response返回过来的结果， FetchResponse.PartitionData fetchData
+        FetchResponse.PartitionData partition = completedFetch.partitionData;
+
+        // 去请求时的那个offset，
+        long fetchOffset = completedFetch.fetchedOffset;
+        int bytes = 0;
+        int recordsCount = 0;
+        PartitionRecords<K, V> parsedRecords = null;
+
+        try {
+            if (!subscriptions.isFetchable(tp)) {
+                // this can happen when a rebalance happened or a partition consumption paused
+                // while fetch is still in-flight
+                // 当rebalance时或者一个partition paused时，fetch还 in-flight
+                log.debug("Ignoring fetched records for partition {} since it is no longer fetchable", tp);
+            } else if (partition.errorCode == Errors.NONE.code()) {
+                // we are interested in this fetch only if the beginning offset matches the
+                // current consumed position
+                Long position = subscriptions.position(tp);
+                if (position == null || position != fetchOffset) {// position == fetchOffset 因为当时发送fetch请求的时候，就是拿的这个值
+                    log.debug("Discarding stale fetch response for partition {} since its offset {} does not match " +
+                        "the expected offset {}", tp, fetchOffset, position);
+                    return null;
+                }
+
+                ByteBuffer buffer = partition.recordSet;
+                MemoryRecords records = MemoryRecords.readableRecords(buffer);
+                List<ConsumerRecord<K, V>> parsed = new ArrayList<>();
+                boolean skippedRecords = false;
+                for (LogEntry logEntry : records) {
+                    // Skip the messages earlier than current position.
+                    if (logEntry.offset() >= position) {
+                        parsed.add(parseRecord(tp, logEntry));
+                        bytes += logEntry.size();
+                    } else {
+                        skippedRecords = true;
+                    }
+                }
+
+                recordsCount = parsed.size();
+                this.sensors.recordTopicFetchMetrics(tp.topic(), bytes, recordsCount);
+
+                if (!parsed.isEmpty()) {
+                    log.trace("Adding fetched record for partition {} with offset {} to buffered record list", tp, position);
+                    parsedRecords = new PartitionRecords<>(fetchOffset, tp, parsed);
+                    ConsumerRecord<K, V> record = parsed.get(parsed.size() - 1);
+                    this.sensors.recordsFetchLag.record(partition.highWatermark - record.offset());
+                } else if (buffer.limit() > 0 && !skippedRecords) {
+                    // we did not read a single message from a non-empty buffer
+                    // because that message's size is larger than fetch size, in this case
+                    // record this exception
+                    Map<TopicPartition, Long> recordTooLargePartitions = Collections.singletonMap(tp, fetchOffset);
+                    throw new RecordTooLargeException("There are some messages at [Partition=Offset]: "
+                        + recordTooLargePartitions
+                        + " whose size is larger than the fetch size "
+                        + this.fetchSize
+                        + " and hence cannot be ever returned."
+                        + " Increase the fetch size on the client (using max.partition.fetch.bytes),"
+                        + " or decrease the maximum message size the broker will allow (using message.max.bytes).",
+                        recordTooLargePartitions);
+                }
+            } else if (partition.errorCode == Errors.NOT_LEADER_FOR_PARTITION.code()
+                || partition.errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code()) {
+                this.metadata.requestUpdate();
+            } else if (partition.errorCode == Errors.OFFSET_OUT_OF_RANGE.code()) {
+                if (fetchOffset != subscriptions.position(tp)) {
+                    log.debug("Discarding stale fetch response for partition {} since the fetched offset {}" +
+                        "does not match the current offset {}", tp, fetchOffset, subscriptions.position(tp));
+                } else if (subscriptions.hasDefaultOffsetResetPolicy()) {
+                    log.info("Fetch offset {} is out of range for partition {}, resetting offset", fetchOffset, tp);
+                    subscriptions.needOffsetReset(tp);
+                } else {
+                    throw new OffsetOutOfRangeException(Collections.singletonMap(tp, fetchOffset));
+                }
+            } else if (partition.errorCode == Errors.TOPIC_AUTHORIZATION_FAILED.code()) {
+                log.warn("Not authorized to read from topic {}.", tp.topic());
+                throw new TopicAuthorizationException(Collections.singleton(tp.topic()));
+            } else if (partition.errorCode == Errors.UNKNOWN.code()) {
+                log.warn("Unknown error fetching data for topic-partition {}", tp);
+            } else {
+                throw new IllegalStateException("Unexpected error code " + partition.errorCode + " while fetching data");
+            }
+        } finally {
+            completedFetch.metricAggregator.record(tp, bytes, recordsCount);
+        }
+
+        return parsedRecords;
     }
 
     /**
@@ -336,6 +440,8 @@ public class Fetcher<K, V> {
      *
      * NOTE: returning empty records guarantees the consumed position are NOT updated.
      *
+     * 解析completedFetches
+     *
      * @return The fetched records per partition
      * @throws OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
      *         the defaultResetPolicy is NONE
@@ -355,6 +461,8 @@ public class Fetcher<K, V> {
 
                     CompletedFetch completion = completedFetchesIterator.next();
                     completedFetchesIterator.remove();
+
+                    // 解析
                     nextInLineRecords = parseFetchedData(completion);
                 } else {
                     recordsRemaining -= append(drained, nextInLineRecords, recordsRemaining);
@@ -533,96 +641,6 @@ public class Fetcher<K, V> {
             requests.put(node, fetch);
         }
         return requests;
-    }
-
-    /**
-     * The callback for fetch completion
-     */
-    private PartitionRecords<K, V> parseFetchedData(CompletedFetch completedFetch) {
-        TopicPartition tp = completedFetch.partition;
-        FetchResponse.PartitionData partition = completedFetch.partitionData;
-        long fetchOffset = completedFetch.fetchedOffset;
-        int bytes = 0;
-        int recordsCount = 0;
-        PartitionRecords<K, V> parsedRecords = null;
-
-        try {
-            if (!subscriptions.isFetchable(tp)) {
-                // this can happen when a rebalance happened or a partition consumption paused
-                // while fetch is still in-flight
-                log.debug("Ignoring fetched records for partition {} since it is no longer fetchable", tp);
-            } else if (partition.errorCode == Errors.NONE.code()) {
-                // we are interested in this fetch only if the beginning offset matches the
-                // current consumed position
-                Long position = subscriptions.position(tp);
-                if (position == null || position != fetchOffset) {
-                    log.debug("Discarding stale fetch response for partition {} since its offset {} does not match " +
-                            "the expected offset {}", tp, fetchOffset, position);
-                    return null;
-                }
-
-                ByteBuffer buffer = partition.recordSet;
-                MemoryRecords records = MemoryRecords.readableRecords(buffer);
-                List<ConsumerRecord<K, V>> parsed = new ArrayList<>();
-                boolean skippedRecords = false;
-                for (LogEntry logEntry : records) {
-                    // Skip the messages earlier than current position.
-                    if (logEntry.offset() >= position) {
-                        parsed.add(parseRecord(tp, logEntry));
-                        bytes += logEntry.size();
-                    } else {
-                        skippedRecords = true;
-                    }
-                }
-
-                recordsCount = parsed.size();
-                this.sensors.recordTopicFetchMetrics(tp.topic(), bytes, recordsCount);
-
-                if (!parsed.isEmpty()) {
-                    log.trace("Adding fetched record for partition {} with offset {} to buffered record list", tp, position);
-                    parsedRecords = new PartitionRecords<>(fetchOffset, tp, parsed);
-                    ConsumerRecord<K, V> record = parsed.get(parsed.size() - 1);
-                    this.sensors.recordsFetchLag.record(partition.highWatermark - record.offset());
-                } else if (buffer.limit() > 0 && !skippedRecords) {
-                    // we did not read a single message from a non-empty buffer
-                    // because that message's size is larger than fetch size, in this case
-                    // record this exception
-                    Map<TopicPartition, Long> recordTooLargePartitions = Collections.singletonMap(tp, fetchOffset);
-                    throw new RecordTooLargeException("There are some messages at [Partition=Offset]: "
-                            + recordTooLargePartitions
-                            + " whose size is larger than the fetch size "
-                            + this.fetchSize
-                            + " and hence cannot be ever returned."
-                            + " Increase the fetch size on the client (using max.partition.fetch.bytes),"
-                            + " or decrease the maximum message size the broker will allow (using message.max.bytes).",
-                            recordTooLargePartitions);
-                }
-            } else if (partition.errorCode == Errors.NOT_LEADER_FOR_PARTITION.code()
-                    || partition.errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code()) {
-                this.metadata.requestUpdate();
-            } else if (partition.errorCode == Errors.OFFSET_OUT_OF_RANGE.code()) {
-                if (fetchOffset != subscriptions.position(tp)) {
-                    log.debug("Discarding stale fetch response for partition {} since the fetched offset {}" +
-                            "does not match the current offset {}", tp, fetchOffset, subscriptions.position(tp));
-                } else if (subscriptions.hasDefaultOffsetResetPolicy()) {
-                    log.info("Fetch offset {} is out of range for partition {}, resetting offset", fetchOffset, tp);
-                    subscriptions.needOffsetReset(tp);
-                } else {
-                    throw new OffsetOutOfRangeException(Collections.singletonMap(tp, fetchOffset));
-                }
-            } else if (partition.errorCode == Errors.TOPIC_AUTHORIZATION_FAILED.code()) {
-                log.warn("Not authorized to read from topic {}.", tp.topic());
-                throw new TopicAuthorizationException(Collections.singleton(tp.topic()));
-            } else if (partition.errorCode == Errors.UNKNOWN.code()) {
-                log.warn("Unknown error fetching data for topic-partition {}", tp);
-            } else {
-                throw new IllegalStateException("Unexpected error code " + partition.errorCode + " while fetching data");
-            }
-        } finally {
-            completedFetch.metricAggregator.record(tp, bytes, recordsCount);
-        }
-
-        return parsedRecords;
     }
 
     /**
