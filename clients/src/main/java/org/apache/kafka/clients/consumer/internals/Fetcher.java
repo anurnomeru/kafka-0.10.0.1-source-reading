@@ -68,6 +68,8 @@ import java.util.Set;
 
 /**
  * This class manage the fetching process with the brokers.
+ *
+ * 这个类管理消息拉取
  */
 public class Fetcher<K, V> {
 
@@ -125,7 +127,9 @@ public class Fetcher<K, V> {
      * an in-flight fetch or pending fetch data.
      */
     public void sendFetches() {
-        for (Map.Entry<Node, FetchRequest> fetchEntry: createFetchRequests().entrySet()) {
+        Map<Node, FetchRequest> fetchRequests = createFetchRequests();
+
+        for (Map.Entry<Node, FetchRequest/* 在createFetchRequests里生成的，最主要的是包括了position信息 */> fetchEntry: fetchRequests.entrySet()) {
             final FetchRequest request = fetchEntry.getValue();
             client.send(fetchEntry.getKey(), ApiKeys.FETCH, request)
                     .addListener(new RequestFutureListener<ClientResponse>() {
@@ -467,10 +471,18 @@ public class Fetcher<K, V> {
         }
     }
 
+   /**
+    * 可获取的分区
+    *
+    * Comment on 2018/9/19 by Anur
+    */
     private Set<TopicPartition> fetchablePartitions() {
         Set<TopicPartition> fetchable = subscriptions.fetchablePartitions();
+
+        // 移除 nextInLineRecords 中有的分区，
+        // 移除 completedFetches 中有的分区
         if (nextInLineRecords != null && !nextInLineRecords.isEmpty())
-            fetchable.remove(nextInLineRecords.partition);
+            fetchable.remove(nextInLineRecords.partition);// todo
         for (CompletedFetch completedFetch : completedFetches)
             fetchable.remove(completedFetch.partition);
         return fetchable;
@@ -479,16 +491,25 @@ public class Fetcher<K, V> {
     /**
      * Create fetch requests for all nodes for which we have assigned partitions
      * that have no existing requests in flight.
+     *
+     * 为所有已经分配了分区，并且没有 inFlight 的节点创建拉取请求
      */
     private Map<Node, FetchRequest> createFetchRequests() {
         // create the fetch info
+        // 1、首先获取集群信息
         Cluster cluster = metadata.fetch();
+
         Map<Node, Map<TopicPartition, FetchRequest.PartitionData>> fetchable = new HashMap<>();
-        for (TopicPartition partition : fetchablePartitions()) {
+
+        Set<TopicPartition> fetchablePartitions = fetchablePartitions();
+
+        for (TopicPartition partition : fetchablePartitions) {
+            // 2、查找leader
             Node node = cluster.leaderFor(partition);
             if (node == null) {
                 metadata.requestUpdate();
-            } else if (this.client.pendingRequestCount(node) == 0) {
+                // 3、有没有pending请求
+            } else if (this.client.pendingRequestCount(node) == 0) {// todo：确定这里不会有bug？？？？？？？？
                 // if there is a leader and no in-flight requests, issue a new fetch
                 Map<TopicPartition, FetchRequest.PartitionData> fetch = fetchable.get(node);
                 if (fetch == null) {
@@ -497,12 +518,14 @@ public class Fetcher<K, V> {
                 }
 
                 long position = this.subscriptions.position(partition);
+                // 4、fetch里面扔进去每个分区的 PartitionData，也就是position信息，这个position是subscriptions里的position
                 fetch.put(partition, new FetchRequest.PartitionData(position, this.fetchSize));
                 log.trace("Added fetch request for partition {} at offset {}", partition, position);
             }
         }
 
         // create the fetches
+        // 5、创建fetchRequest
         Map<Node, FetchRequest> requests = new HashMap<>();
         for (Map.Entry<Node, Map<TopicPartition, FetchRequest.PartitionData>> entry : fetchable.entrySet()) {
             Node node = entry.getKey();

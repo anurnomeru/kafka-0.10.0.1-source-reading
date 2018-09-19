@@ -352,9 +352,12 @@ public class SubscriptionState {
         return this.assignment.keySet();
     }
 
+    // 获取可拉取消息的分区，循环 assignment  /** 记录每个TopicPartition的消费状态 */
     public Set<TopicPartition> fetchablePartitions() {
         Set<TopicPartition> fetchable = new HashSet<>();
         for (Map.Entry<TopicPartition, TopicPartitionState> entry : assignment.entrySet()) {
+
+            // 只要position 不是null，并且没有暂停就可以
             if (entry.getValue()
                      .isFetchable()) {
                 fetchable.add(entry.getKey());

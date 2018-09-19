@@ -240,6 +240,7 @@ public class ConsumerNetworkClient implements Closeable {
      * Poll for network IO and return immediately. This will not trigger wakeups,
      * nor will it execute any delayed tasks.
      */
+    // todo 不是很明白
     public void pollNoWakeup() {
         disableWakeups();
         try {
@@ -318,6 +319,8 @@ public class ConsumerNetworkClient implements Closeable {
     /**
      * Get the count of pending requests to the given node. This includes both request that
      * have been transmitted (i.e. in-flight requests) and those which are awaiting transmission.
+     *
+     * 获取当前node的未发送请求数。这个包括 等待响应的请求（in-flight requests）和等待发送的请求。
      *
      * @param node The node in question
      *

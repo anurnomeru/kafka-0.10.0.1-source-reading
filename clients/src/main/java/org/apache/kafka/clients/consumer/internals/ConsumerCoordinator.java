@@ -386,10 +386,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     /**
      * Refresh the committed offsets for provided partitions.
+     * 为所提供的partitions刷新committed offsets
      */
     public void refreshCommittedOffsetsIfNeeded() {
         if (subscriptions.refreshCommitsNeeded()) {
+            // 发送offsetFetch】Request，并处理OffsetFetchResponse响应，返回最近提交的offset集合
             Map<TopicPartition, OffsetAndMetadata> offsets = fetchCommittedOffsets(subscriptions.assignedPartitions());
+
             for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
                 TopicPartition tp = entry.getKey();
                 // verify assignment is still active
@@ -493,6 +496,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // ensure the commit has a chance to be transmitted (without blocking on its completion).
         // Note that commits are treated as heartbeats by the coordinator, so there is no need to
         // explicitly allow heartbeats through delayed task execution.
+
+        // 确保提交有机会被传输（不在它完成时阻塞）？
+        // 注意提交会被当作heartbeats来对待，所以这里不需要通过延迟任务执行显示地允许心跳
         client.pollNoWakeup();
     }
 
@@ -611,6 +617,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // create the offset commit request
         Map<TopicPartition, OffsetCommitRequest.PartitionData> offsetData = new HashMap<>(offsets.size());
+
+        // 有点搞不明白这里的意义在哪里？？？版本兼容？？ OffsetAndMetadata 和 PartitionData 的数据结构完全一样
         for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
             OffsetAndMetadata offsetAndMetadata = entry.getValue();
             offsetData.put(entry.getKey(), new OffsetCommitRequest.PartitionData(
@@ -757,6 +765,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         public void handle(OffsetFetchResponse response, RequestFuture<Map<TopicPartition, OffsetAndMetadata>> future) {
             Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>(response.responseData()
                                                                                    .size());
+
             for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry : response.responseData()
                                                                                               .entrySet()) {
                 TopicPartition tp = entry.getKey();
