@@ -520,7 +520,7 @@ public class Fetcher<K, V> {
     /**
      * Reset offsets for the given partition using the offset reset strategy.
      *
-     * 根据offset的重置策略来重置offset
+     * 根据offset的重置策略来重置offset（TODO：重置了好像并没有什么卵用？？？）
      *
      * @param partition The given partition that needs reset offset
      *
@@ -603,7 +603,7 @@ public class Fetcher<K, V> {
             return RequestFuture.staleMetadata();// 表示过期的元数据
         } else if (info.leader() == null) {// 如果没有选主，或者没有拉取到leader的数据
             log.debug("Leader for partition {} unavailable for fetching offset, wait for metadata refresh", topicPartition);
-            return RequestFuture.leaderNotAvailable();// 表示
+            return RequestFuture.leaderNotAvailable();// 表示没有选主
         } else {
             Node node = info.leader();
             ListOffsetRequest request = new ListOffsetRequest(-1, partitions);
