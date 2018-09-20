@@ -1052,23 +1052,26 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Do one round of polling. In addition to checking for new data, this does any needed
      * heart-beating, auto-commits, and offset updates.
      *
+     * 进行一次轮询，此外，出了检查新数据，这里还会在需要的时候进行心跳发送，自动提交commit，更新offset
+     *
      * @param timeout The maximum time to block in the underlying poll
      *
      * @return The fetched records (may be empty)
      */
     private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollOnce(long timeout) {
         // TODO: Sub-requests should take into account the poll timeout (KAFKA-1894)
-        coordinator.ensureCoordinatorReady();
+        coordinator.ensureCoordinatorReady();// 确保能连接上协调器
 
         // ensure we have partitions assigned if we expect to
         if (subscriptions.partitionsAutoAssigned()) {
-            coordinator.ensurePartitionAssignment();
+            coordinator.ensurePartitionAssignment();// 确保已经分配分区
         }
 
         // fetch positions if we have partitions we're subscribed to that we
         // don't know the offset for
-        if (!subscriptions.hasAllFetchPositions()) {
-            updateFetchPositions(this.subscriptions.missingFetchPositions());
+        // 如果有我们订阅了，但是不知道它的offset的分区，将其position fetch下来。
+        if (!subscriptions.hasAllFetchPositions()) {// 不是所有订阅的partition都晓得其offset。
+            updateFetchPositions(this.subscriptions.missingFetchPositions());// fetch一下
         }
 
         long now = time.milliseconds();
@@ -1538,6 +1541,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             throw new ConcurrentModificationException("KafkaConsumer is not safe for multi-threaded access");
         }
         refcount.incrementAndGet();
+    }
+
+    public static void main(String[] args) {
+        AtomicLong atomicLong = new AtomicLong(1L);
+        System.out.println(atomicLong.compareAndSet(1L, 5L));
+        System.out.println(atomicLong);
     }
 
     /**
