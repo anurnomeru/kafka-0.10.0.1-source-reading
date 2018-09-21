@@ -447,7 +447,7 @@ private[kafka] class Processor(val id: Int, // 定置化，id一共有 endPoint 
 
   //  processor的核心方法
   override def run() {
-    startupComplete()
+    startupComplete() // 通知一下主线程可以继续了
     while (isRunning) {
       try {
         // setup any new connections that have been queued up
@@ -573,18 +573,21 @@ private[kafka] class Processor(val id: Int, // 定置化，id一共有 endPoint 
 
   /**
     * Register any new connections that have been queued up
+    *
     */
   private def configureNewConnections() {
     while (!newConnections.isEmpty) {
-      val channel = newConnections.poll()
+      val channel = newConnections.poll() // 配置一下newConnections
       try {
+
+        // 还能这么用？？？？
         debug(s"Processor $id listening to new connection from ${channel.socket.getRemoteSocketAddress}")
         val localHost = channel.socket().getLocalAddress.getHostAddress
         val localPort = channel.socket().getLocalPort
         val remoteHost = channel.socket().getInetAddress.getHostAddress
         val remotePort = channel.socket().getPort
-        val connectionId = ConnectionId(localHost, localPort, remoteHost, remotePort).toString
-        selector.register(connectionId, channel)
+        val connectionId: String = ConnectionId(localHost, localPort, remoteHost, remotePort).toString
+        selector.register(connectionId, channel) // 注册一下Read事件，并且创建KafkaSelector，同时将connectionId/ kafkaChannel/ SelectionKey 互相绑定
       } catch {
         // We explicitly catch all non fatal exceptions and close the socket to avoid a socket leak. The other
         // throwables will be caught in processor and logged as uncaught exceptions.

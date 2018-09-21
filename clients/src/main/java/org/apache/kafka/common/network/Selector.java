@@ -262,10 +262,11 @@ public class Selector implements Selectable {
      * Use this on server-side, when a connection is accepted by a different thread but processed by the Selector
      * Note that we are not checking if the connection id is valid - since the connection already exists
      *
-     * 将socketChannel注册到nioSelector上，在服务端，当一个连接被另一个线程accept，但通过Selector来处理。
-     * 注意我们不会去检查这个连接id是否是可用的，如果这个连接已经存在的话
+     * 当前channel监听一下read事件
+     * 并且创建kafkaChannel，等同于 {@link #connect(String, InetSocketAddress, int, int)} 方法里面的那个
+     * 并且使得 创建好的 KafkaChannel/ SelectionKey/ id 互相绑定
      */
-    // TODO 什么时候会调用它？
+    // TODO 这个方法是服务端专属！
     public void register(String id, SocketChannel socketChannel) throws ClosedChannelException {
         SelectionKey key = socketChannel.register(nioSelector, SelectionKey.OP_READ);
         KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize);
