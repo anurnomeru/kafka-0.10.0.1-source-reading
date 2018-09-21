@@ -85,7 +85,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
   // 向RequestChannel中添加一个监听器，此监听器实现的功能是：当Handle线程向某个
   // responseQueue中写入数据时，会唤醒对应的Processor线程进行处理
 
-  // 这个response监听器的作用就是去唤醒一下传入id对应的processor
+  // 这个response监听器的作用就是去唤醒一下传入id对应的processor里的Selector
   requestChannel.addResponseListener(id => processors(id).wakeup())
 
   /**
@@ -444,6 +444,8 @@ private[kafka] class Processor(val id: Int, // 定置化，id一共有 endPoint 
     false,
     ChannelBuilders.create(protocol, Mode.SERVER, LoginType.SERVER, channelConfigs, null, true))
 
+
+  //  processor的核心方法
   override def run() {
     startupComplete()
     while (isRunning) {
@@ -566,7 +568,7 @@ private[kafka] class Processor(val id: Int, // 定置化，id一共有 endPoint 
     */
   def accept(socketChannel: SocketChannel) {
     newConnections.add(socketChannel)
-    wakeup()
+    wakeup() // 通知当前这个Processor 的 selector不要阻塞了，Acceptor虽然也用了nio，但是没有用KSelector去做包装
   }
 
   /**
