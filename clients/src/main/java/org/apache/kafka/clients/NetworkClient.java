@@ -502,6 +502,7 @@ public class NetworkClient implements KafkaClient {
 
     /**
      * Handle any completed receives and update the response list with the responses received.
+     * 处理任何已完成的接收，并使用接收到的响应更新响应列表。
      *
      * @param responses The list of responses to update
      * @param now The current time
