@@ -48,6 +48,7 @@ public class ByteBufferSend implements Send {
 
     /**
      * 判断completed，首先要没有剩余字节，其次不在【添加中】
+     * pending 在plain类型时，一定是false
      */
     @Override
     public boolean completed() {

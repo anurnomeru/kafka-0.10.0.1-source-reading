@@ -171,13 +171,16 @@ object RequestChannel extends Logging {
   }
 
   trait ResponseAction
+  /** 表示这个Response需要发送给客户端，首先查找对应的KafkaChannel，为其注册OP_WRITE事件，并将KafkaChannel的Send字段指向待发送Response对象
+    * 同时会将Response从responseQueue移除，放入inflightResponses中（在发完就会取消关注OP_WRITE） */
   case object SendAction extends ResponseAction
+  /** 表示此连接不需要相应，所以只需要关注一下OP_READ */
   case object NoOpAction extends ResponseAction
   case object CloseConnectionAction extends ResponseAction
 }
 
 class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMetricsGroup {
-  private var responseListeners: List[(Int) => Unit] = Nil
+  private var responseListeners: List[Int => Unit] = Nil
   private val requestQueue = new ArrayBlockingQueue[RequestChannel.Request](queueSize)
   private val responseQueues = new Array[BlockingQueue[RequestChannel.Response]](numProcessors)
   for(i <- 0 until numProcessors)

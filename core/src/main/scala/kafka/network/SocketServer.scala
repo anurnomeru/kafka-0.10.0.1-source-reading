@@ -475,7 +475,7 @@ private[kafka] class Processor(val id: Int, // 定置化，id一共有 endPoint 
   }
 
   private def processNewResponses() {
-    var curr = requestChannel.receiveResponse(id)
+    var curr: RequestChannel.Response = requestChannel.receiveResponse(id) // 从requestChannel中取出 response
     while (curr != null) {
       try {
         curr.responseAction match {
@@ -573,7 +573,7 @@ private[kafka] class Processor(val id: Int, // 定置化，id一共有 endPoint 
 
   /**
     * Register any new connections that have been queued up
-    *
+    * 创建当前channel有关的配置，比如它的KSelector，生成其connectionId
     */
   private def configureNewConnections() {
     while (!newConnections.isEmpty) {

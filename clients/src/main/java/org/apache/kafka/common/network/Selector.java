@@ -263,7 +263,7 @@ public class Selector implements Selectable {
      * Note that we are not checking if the connection id is valid - since the connection already exists
      *
      * 当前channel监听一下read事件
-     * 并且创建kafkaChannel，等同于 {@link #connect(String, InetSocketAddress, int, int)} 方法里面的那个
+     * 并且创建kafkaChannel，等同于 {@link #connect(String, InetSocketAddress, int, int)} 方法里面的那个，里面那个监听的事件是connect
      * 并且使得 创建好的 KafkaChannel/ SelectionKey/ id 互相绑定
      */
     // TODO 这个方法是服务端专属！
