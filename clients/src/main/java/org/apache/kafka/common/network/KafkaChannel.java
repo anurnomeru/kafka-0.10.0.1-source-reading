@@ -18,13 +18,10 @@
 package org.apache.kafka.common.network;
 
 import java.io.IOException;
-
 import java.net.InetAddress;
 import java.net.Socket;
 import java.nio.channels.SelectionKey;
-
 import java.security.Principal;
-
 import org.apache.kafka.common.utils.Utils;
 
 /**
@@ -102,6 +99,70 @@ public class KafkaChannel {
         if (transportLayer.ready() && !authenticator.complete()) {
             authenticator.authenticate();
         }
+    }
+
+    public static void main(String[] args) {
+        System.out.println(reorganizeString("aaaabbb"));
+        ;
+    }
+
+    static byte[] sBytes;
+
+    static int length;
+
+    public static String reorganizeString(String S) {
+        sBytes = S.getBytes();
+
+        length = sBytes.length;
+
+        for (int i = 0; i < length - 1; i++) {
+            if (sBytes[i] == sBytes[i + 1]) {
+                System.out.println(new String(sBytes));
+                if (!safeExchange(i, i + 1)) {
+                    return "";
+                }
+            }
+        }
+        return new String(sBytes);
+    }
+
+    public static boolean safeExchange(int from, int to) {
+        if (from == to) {// 实在换不了就跳出所有循环
+            return false;
+        }
+
+        if (sBytes[from] != sBytes[to]) {//　不同才能换
+            int exchange = 0;
+            if (to > 0) {// 防止数组越界
+                if (sBytes[to - 1] != sBytes[from + 1]) {// 换过去还是不符合规矩，等于白换
+                    exchange++;
+                }
+            } else {
+                exchange++;
+            }
+
+            if (to != length-1) {// 防止数组越界
+                if (sBytes[to + 1] != sBytes[from + 1]) {
+                    exchange++;
+                }
+            } else {
+                exchange++;
+            }
+
+            if (exchange == 2) {// 满足条件就换
+                byte temp = sBytes[from + 1];
+                sBytes[from] = sBytes[to];
+                sBytes[to] = temp;
+                return true;
+            }
+        }
+
+        if ((to + 1) < length) {
+            to = to + 1;
+        } else {
+            to = 0;
+        }
+        return safeExchange(from, to);
     }
 
     /**
