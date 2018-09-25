@@ -22,7 +22,7 @@ import java.nio.ByteBuffer
 import java.util.HashMap
 import java.util.concurrent._
 
-import com.yammer.metrics.core.Gauge
+import com.yammer.metrics.core.{Gauge, Histogram, Meter}
 import kafka.api._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{Logging, SystemTime}
@@ -186,10 +186,12 @@ object RequestChannel extends Logging {
 
 class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMetricsGroup {
   private var responseListeners: List[Int => Unit] = Nil
+  // 一个空的列表，里面装载着关于某个node_id的listener
   private val requestQueue = new ArrayBlockingQueue[RequestChannel.Request](queueSize)
-  private val responseQueues = new Array[BlockingQueue[RequestChannel.Response]](numProcessors)
+  // 装request的阻塞队列
+  private val responseQueues = new Array[BlockingQueue[RequestChannel.Response]](numProcessors) // 装response LinkedBlockingQueue的阻塞队列
   for (i <- 0 until numProcessors)
-    responseQueues(i) = new LinkedBlockingQueue[RequestChannel.Response]()
+    responseQueues(i) = new LinkedBlockingQueue[RequestChannel.Response]() // 无界队列
 
   newGauge(
     "RequestQueueSize",
@@ -212,7 +214,7 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
   }
 
   /** Send a request to be handled, potentially blocking until there is room in the queue for the request
-    * 将一个request发去处理，可能会阻塞，直到queue有空间来存放这个request */
+    * 将一个request发去处理(通过socket发到broker的请求)，可能会阻塞，直到queue有空间来存放这个request */
   def sendRequest(request: RequestChannel.Request) {
     requestQueue.put(request)
   }
@@ -220,20 +222,21 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
   /** Send a response back to the socket server to be sent over the network */
   def sendResponse(response: RequestChannel.Response) {
     responseQueues(response.processor).put(response)
-    for (onResponse <- responseListeners)
+    for (onResponse <- responseListeners) // 循环调用监听器，在即将发送消息给其他地方之前
       onResponse(response.processor)
   }
 
   /** No operation to take for the request, need to read more over the network */
   def noOperation(processor: Int, request: RequestChannel.Request) {
-    responseQueues(processor).put(new RequestChannel.Response(processor, request, null, RequestChannel.NoOpAction))
+    // 不用响应，所以在Processor中只要关注一下READ就可以了
+    responseQueues(processor).put(RequestChannel.Response(processor, request, null, RequestChannel.NoOpAction))
     for (onResponse <- responseListeners)
       onResponse(processor)
   }
 
   /** Close the connection for the request */
   def closeConnection(processor: Int, request: RequestChannel.Request) {
-    responseQueues(processor).put(new RequestChannel.Response(processor, request, null, RequestChannel.CloseConnectionAction))
+    responseQueues(processor).put(RequestChannel.Response(processor, request, null, RequestChannel.CloseConnectionAction))
     for (onResponse <- responseListeners)
       onResponse(processor)
   }
@@ -265,27 +268,27 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
 
 object RequestMetrics {
   val metricsMap = new scala.collection.mutable.HashMap[String, RequestMetrics]
-  val consumerFetchMetricName = ApiKeys.FETCH.name + "Consumer"
-  val followFetchMetricName = ApiKeys.FETCH.name + "Follower"
+  val consumerFetchMetricName: String = ApiKeys.FETCH.name + "Consumer"
+  val followFetchMetricName: String = ApiKeys.FETCH.name + "Follower"
   (ApiKeys.values().toList.map(e => e.name)
     ++ List(consumerFetchMetricName, followFetchMetricName)).foreach(name => metricsMap.put(name, new RequestMetrics(name)))
 }
 
 class RequestMetrics(name: String) extends KafkaMetricsGroup {
   val tags = Map("request" -> name)
-  val requestRate = newMeter("RequestsPerSec", "requests", TimeUnit.SECONDS, tags)
+  val requestRate: Meter = newMeter("RequestsPerSec", "requests", TimeUnit.SECONDS, tags)
   // time a request spent in a request queue
-  val requestQueueTimeHist = newHistogram("RequestQueueTimeMs", biased = true, tags)
+  val requestQueueTimeHist: Histogram = newHistogram("RequestQueueTimeMs", biased = true, tags)
   // time a request takes to be processed at the local broker
-  val localTimeHist = newHistogram("LocalTimeMs", biased = true, tags)
+  val localTimeHist: Histogram = newHistogram("LocalTimeMs", biased = true, tags)
   // time a request takes to wait on remote brokers (currently only relevant to fetch and produce requests)
-  val remoteTimeHist = newHistogram("RemoteTimeMs", biased = true, tags)
+  val remoteTimeHist: Histogram = newHistogram("RemoteTimeMs", biased = true, tags)
   // time a request is throttled (only relevant to fetch and produce requests)
-  val throttleTimeHist = newHistogram("ThrottleTimeMs", biased = true, tags)
+  val throttleTimeHist: Histogram = newHistogram("ThrottleTimeMs", biased = true, tags)
   // time a response spent in a response queue
-  val responseQueueTimeHist = newHistogram("ResponseQueueTimeMs", biased = true, tags)
+  val responseQueueTimeHist: Histogram = newHistogram("ResponseQueueTimeMs", biased = true, tags)
   // time to send the response to the requester
-  val responseSendTimeHist = newHistogram("ResponseSendTimeMs", biased = true, tags)
-  val totalTimeHist = newHistogram("TotalTimeMs", biased = true, tags)
+  val responseSendTimeHist: Histogram = newHistogram("ResponseSendTimeMs", biased = true, tags)
+  val totalTimeHist: Histogram = newHistogram("TotalTimeMs", biased = true, tags)
 }
 

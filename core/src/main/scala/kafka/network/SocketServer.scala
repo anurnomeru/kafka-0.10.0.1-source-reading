@@ -464,6 +464,7 @@ private[kafka] class Processor(val id: Int, // 定置化，id一共有 endPoint 
 
         // 移除掉inflight，然后关注READ
         processCompletedSends()
+
         processDisconnected()
       } catch {
         // We catch all the throwables here to prevent the processor thread from exiting. We do this because
