@@ -1,19 +1,19 @@
 /**
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+  * Licensed to the Apache Software Foundation (ASF) under one or more
+  * contributor license agreements.  See the NOTICE file distributed with
+  * this work for additional information regarding copyright ownership.
+  * The ASF licenses this file to You under the Apache License, Version 2.0
+  * (the "License"); you may not use this file except in compliance with
+  * the License.  You may obtain a copy of the License at
+  *
+  * http://www.apache.org/licenses/LICENSE-2.0
+  *
+  * Unless required by applicable law or agreed to in writing, software
+  * distributed under the License is distributed on an "AS IS" BASIS,
+  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
+  */
 
 package kafka.network
 
@@ -28,8 +28,8 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{Logging, SystemTime}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.Send
-import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol, Protocol}
-import org.apache.kafka.common.requests.{RequestSend, ProduceRequest, AbstractRequest, RequestHeader, ApiVersionsRequest}
+import org.apache.kafka.common.protocol.{ApiKeys, Protocol, SecurityProtocol}
+import org.apache.kafka.common.requests.{ControlledShutdownRequest => _, FetchRequest => _, _}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.log4j.Logger
 
@@ -61,10 +61,10 @@ object RequestChannel extends Logging {
     // NOTE: this map only includes the server-side request/response handlers. Newer
     // request types should only use the client-side versions which are parsed with
     // o.a.k.common.requests.AbstractRequest.getRequest()
-    private val keyToNameAndDeserializerMap: Map[Short, (ByteBuffer) => RequestOrResponse]=
-      Map(ApiKeys.FETCH.id -> FetchRequest.readFrom,
-        ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> ControlledShutdownRequest.readFrom
-      )
+    private val keyToNameAndDeserializerMap: Map[Short, (ByteBuffer) => RequestOrResponse] =
+    Map(ApiKeys.FETCH.id -> FetchRequest.readFrom,
+      ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> ControlledShutdownRequest.readFrom
+    )
 
     // TODO: this will be removed once we migrated to client-side format
     val requestObj =
@@ -73,15 +73,15 @@ object RequestChannel extends Logging {
     // if we failed to find a server-side mapping, then try using the
     // client-side request / response format
     val header: RequestHeader =
-      if (requestObj == null) {
-        buffer.rewind
-        try RequestHeader.parse(buffer)
-        catch {
-          case ex: Throwable =>
-            throw new InvalidRequestException(s"Error parsing request header. Our best guess of the apiKey is: $requestId", ex)
-        }
-      } else
-        null
+    if (requestObj == null) {
+      buffer.rewind
+      try RequestHeader.parse(buffer)
+      catch {
+        case ex: Throwable =>
+          throw new InvalidRequestException(s"Error parsing request header. Our best guess of the apiKey is: $requestId", ex)
+      }
+    } else
+      null
     val body: AbstractRequest =
       if (requestObj == null)
         try {
@@ -171,20 +171,24 @@ object RequestChannel extends Logging {
   }
 
   trait ResponseAction
+
   /** 表示这个Response需要发送给客户端，首先查找对应的KafkaChannel，为其注册OP_WRITE事件，并将KafkaChannel的Send字段指向待发送Response对象
     * 同时会将Response从responseQueue移除，放入inflightResponses中（在发完就会取消关注OP_WRITE） */
   case object SendAction extends ResponseAction
+
   /** 表示此连接不需要相应，所以只需要关注一下OP_READ */
   case object NoOpAction extends ResponseAction
-  /** 表示断开了连接*/
+
+  /** 表示断开了连接 */
   case object CloseConnectionAction extends ResponseAction
+
 }
 
 class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMetricsGroup {
   private var responseListeners: List[Int => Unit] = Nil
   private val requestQueue = new ArrayBlockingQueue[RequestChannel.Request](queueSize)
   private val responseQueues = new Array[BlockingQueue[RequestChannel.Response]](numProcessors)
-  for(i <- 0 until numProcessors)
+  for (i <- 0 until numProcessors)
     responseQueues(i) = new LinkedBlockingQueue[RequestChannel.Response]()
 
   newGauge(
@@ -194,8 +198,8 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
     }
   )
 
-  newGauge("ResponseQueueSize", new Gauge[Int]{
-    def value = responseQueues.foldLeft(0) {(total, q) => total + q.size()}
+  newGauge("ResponseQueueSize", new Gauge[Int] {
+    def value = responseQueues.foldLeft(0) { (total, q) => total + q.size() }
   })
 
   for (i <- 0 until numProcessors) {
@@ -207,7 +211,8 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
     )
   }
 
-  /** Send a request to be handled, potentially blocking until there is room in the queue for the request */
+  /** Send a request to be handled, potentially blocking until there is room in the queue for the request
+    * 将一个request发去处理，可能会阻塞，直到queue有空间来存放这个request */
   def sendRequest(request: RequestChannel.Request) {
     requestQueue.put(request)
   }
@@ -215,21 +220,21 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
   /** Send a response back to the socket server to be sent over the network */
   def sendResponse(response: RequestChannel.Response) {
     responseQueues(response.processor).put(response)
-    for(onResponse <- responseListeners)
+    for (onResponse <- responseListeners)
       onResponse(response.processor)
   }
 
   /** No operation to take for the request, need to read more over the network */
   def noOperation(processor: Int, request: RequestChannel.Request) {
     responseQueues(processor).put(new RequestChannel.Response(processor, request, null, RequestChannel.NoOpAction))
-    for(onResponse <- responseListeners)
+    for (onResponse <- responseListeners)
       onResponse(processor)
   }
 
   /** Close the connection for the request */
   def closeConnection(processor: Int, request: RequestChannel.Request) {
     responseQueues(processor).put(new RequestChannel.Response(processor, request, null, RequestChannel.CloseConnectionAction))
-    for(onResponse <- responseListeners)
+    for (onResponse <- responseListeners)
       onResponse(processor)
   }
 
@@ -243,7 +248,7 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
 
   /** Get a response for the given processor if there is one */
   def receiveResponse(processor: Int): RequestChannel.Response = {
-    val response = responseQueues(processor).poll()// 拿出一个response
+    val response = responseQueues(processor).poll() // 拿出一个response
     if (response != null)
       response.request.responseDequeueTimeMs = SystemTime.milliseconds
     response

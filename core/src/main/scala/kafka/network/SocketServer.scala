@@ -448,14 +448,21 @@ private[kafka] class Processor(val id: Int, // 定置化，id一共有 endPoint 
   //  processor的核心方法
   override def run() {
     startupComplete() // 通知一下主线程可以继续了
-    while (isRunning) {
+    while (isRunning) {/** 调用shutdown就不再while了 */
       try {
         // setup any new connections that have been queued up
         configureNewConnections() // 处理新连接
         // register any new responses for writing
         processNewResponses()
+
         poll() // poll一波
-        processCompletedReceives() // 类似于networkClient里面那个
+
+        // 类似于networkClient里面那个，它其实就是将收到的东西扔进 RequestChannel 的 queue 里
+        // RequestChannel 是 Processor 和 Handler线程之间传递数据的队列
+        // 然后取消关注READ
+        processCompletedReceives()
+
+        // 移除掉inflight，然后关注READ
         processCompletedSends()
         processDisconnected()
       } catch {
@@ -541,16 +548,23 @@ private[kafka] class Processor(val id: Int, // 定置化，id一共有 endPoint 
         // 这个 source 实际上就是 node.idString，根据id获取到相应的kafkaChannel
         val channel: KafkaChannel = selector.channel(networkReceive.source)
 
+        // 创建 KafkaChannel对应的Session对象，书上说和权限控制有关，后面会讲
         val session: RequestChannel.Session = RequestChannel.Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, channel.principal.getName),
           channel.socketAddress)
-        val req = RequestChannel.Request(processor = id, connectionId = networkReceive.source, session = session, buffer = networkReceive.payload, startTimeMs = time.milliseconds, securityProtocol = protocol)
+
+        // Processor id， node id， session， 返回的buffer， 协议等等信息存一下
+        val req: RequestChannel.Request = RequestChannel.Request(processor = id, connectionId = networkReceive.source, session = session, buffer = networkReceive.payload, startTimeMs = time.milliseconds, securityProtocol = protocol)
+
+        // 然后将它们扔进requestQueue
         requestChannel.sendRequest(req)
+
+        // 这个刚收到消息的节点，不再关注READ请求
         selector.mute(networkReceive.source)
       } catch {
         case e@(_: InvalidRequestException | _: SchemaException) =>
           // note that even though we got an exception, we can assume that receive.source is valid. Issues with constructing a valid receive object were handled earlier
           error(s"Closing socket for ${networkReceive.source} because of error", e)
-          close(selector, networkReceive.source)
+          close(selector, networkReceive.source) // 如果异常，就关闭掉channel
       }
     }
   }
