@@ -176,6 +176,7 @@ object RequestChannel extends Logging {
   case object SendAction extends ResponseAction
   /** 表示此连接不需要相应，所以只需要关注一下OP_READ */
   case object NoOpAction extends ResponseAction
+  /** 表示断开了连接*/
   case object CloseConnectionAction extends ResponseAction
 }
 
@@ -242,7 +243,7 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
 
   /** Get a response for the given processor if there is one */
   def receiveResponse(processor: Int): RequestChannel.Response = {
-    val response = responseQueues(processor).poll()
+    val response = responseQueues(processor).poll()// 拿出一个response
     if (response != null)
       response.request.responseDequeueTimeMs = SystemTime.milliseconds
     response
@@ -253,7 +254,7 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
   }
 
   def shutdown() {
-    requestQueue.clear
+    requestQueue.clear()
   }
 }
 

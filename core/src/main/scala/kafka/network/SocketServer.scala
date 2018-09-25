@@ -451,11 +451,11 @@ private[kafka] class Processor(val id: Int, // 定置化，id一共有 endPoint 
     while (isRunning) {
       try {
         // setup any new connections that have been queued up
-        configureNewConnections()
+        configureNewConnections() // 处理新连接
         // register any new responses for writing
         processNewResponses()
-        poll()
-        processCompletedReceives()
+        poll() // poll一波
+        processCompletedReceives() // 类似于networkClient里面那个
         processCompletedSends()
         processDisconnected()
       } catch {
@@ -479,21 +479,28 @@ private[kafka] class Processor(val id: Int, // 定置化，id一共有 endPoint 
     while (curr != null) {
       try {
         curr.responseAction match {
+          /** 表示此连接不需要相应，所以只需要关注一下OP_READ */
           case RequestChannel.NoOpAction =>
             // There is no response to send to the client, we need to read more pipelined requests
             // that are sitting in the server's socket buffer
+            // todo：没有需要发送给client的response，我们需要读取更多位于服务器socket buffer的流水线请求
             curr.request.updateRequestMetrics()
             trace("Socket server received empty response to send, registering for read: " + curr)
-            selector.unmute(curr.request.connectionId)
+            selector.unmute(curr.request.connectionId) // 继续关注一下READ
+
+          /** 表示这个Response需要发送给客户端，首先查找对应的KafkaChannel，为其注册OP_WRITE事件，并将KafkaChannel的Send字段指向待发送Response对象
+            * 同时会将Response从responseQueue移除，放入inflightResponses中（在发完就会取消关注OP_WRITE） */
           case RequestChannel.SendAction =>
-            sendResponse(curr)
+            sendResponse(curr) // 把response返回去
+
+          /** 表示断开了连接 */
           case RequestChannel.CloseConnectionAction =>
             curr.request.updateRequestMetrics()
             trace("Closing socket connection actively according to the response code.")
             close(selector, curr.request.connectionId)
         }
       } finally {
-        curr = requestChannel.receiveResponse(id)
+        curr = requestChannel.receiveResponse(id) // 继续while循环
       }
     }
   }
@@ -501,8 +508,8 @@ private[kafka] class Processor(val id: Int, // 定置化，id一共有 endPoint 
   /* `protected` for test usage */
   protected[network] def sendResponse(response: RequestChannel.Response) {
     trace(s"Socket server received response to send, registering for write and sending data: $response")
-    val channel = selector.channel(response.responseSend.destination)
-    // `channel` can be null if the selector closed the connection because it was idle for too long
+    val channel: KafkaChannel = selector.channel(response.responseSend.destination) // 根据node_id获取到对应的channel
+    // `channel` can be null if the selector closed the connection because it was idle for too long // 闲置太长时间的连接可能会被关掉
     if (channel == null) {
       warn(s"Attempting to send response via channel for which there is no open connection, connection id $id")
       response.request.updateRequestMetrics()
@@ -524,20 +531,26 @@ private[kafka] class Processor(val id: Int, // 定置化，id一共有 endPoint 
     }
   }
 
+  /**
+    * 处理刚接收到的请求
+    */
   private def processCompletedReceives() {
-    selector.completedReceives.asScala.foreach { receive =>
+    selector.completedReceives // List[NetworkReceive]
+      .asScala.foreach { networkReceive =>
       try {
-        val channel = selector.channel(receive.source)
-        val session = RequestChannel.Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, channel.principal.getName),
+        // 这个 source 实际上就是 node.idString，根据id获取到相应的kafkaChannel
+        val channel: KafkaChannel = selector.channel(networkReceive.source)
+
+        val session: RequestChannel.Session = RequestChannel.Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, channel.principal.getName),
           channel.socketAddress)
-        val req = RequestChannel.Request(processor = id, connectionId = receive.source, session = session, buffer = receive.payload, startTimeMs = time.milliseconds, securityProtocol = protocol)
+        val req = RequestChannel.Request(processor = id, connectionId = networkReceive.source, session = session, buffer = networkReceive.payload, startTimeMs = time.milliseconds, securityProtocol = protocol)
         requestChannel.sendRequest(req)
-        selector.mute(receive.source)
+        selector.mute(networkReceive.source)
       } catch {
         case e@(_: InvalidRequestException | _: SchemaException) =>
           // note that even though we got an exception, we can assume that receive.source is valid. Issues with constructing a valid receive object were handled earlier
-          error(s"Closing socket for ${receive.source} because of error", e)
-          close(selector, receive.source)
+          error(s"Closing socket for ${networkReceive.source} because of error", e)
+          close(selector, networkReceive.source)
       }
     }
   }
