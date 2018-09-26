@@ -452,6 +452,7 @@ private[kafka] class Processor(val id: Int, // 定置化，id一共有 endPoint 
       try {
         // setup any new connections that have been queued up
         configureNewConnections() // 处理新连接
+
         // register any new responses for writing
         processNewResponses()
 

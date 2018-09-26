@@ -19,7 +19,7 @@ package kafka.network
 
 import java.net.InetAddress
 import java.nio.ByteBuffer
-import java.util.HashMap
+import java.util
 import java.util.concurrent._
 
 import com.yammer.metrics.core.{Gauge, Histogram, Meter}
@@ -35,43 +35,62 @@ import org.apache.log4j.Logger
 
 
 object RequestChannel extends Logging {
-  val AllDone = new Request(processor = 1, connectionId = "2", new Session(KafkaPrincipal.ANONYMOUS, InetAddress.getLocalHost()), buffer = getShutdownReceive(), startTimeMs = 0, securityProtocol = SecurityProtocol.PLAINTEXT)
+  val AllDone = Request(processor = 1, connectionId = "2", Session(KafkaPrincipal.ANONYMOUS, InetAddress.getLocalHost), buffer = getShutdownReceive(), startTimeMs = 0, securityProtocol = SecurityProtocol.PLAINTEXT)
 
   def getShutdownReceive() = {
     val emptyRequestHeader = new RequestHeader(ApiKeys.PRODUCE.id, "", 0)
-    val emptyProduceRequest = new ProduceRequest(0, 0, new HashMap[TopicPartition, ByteBuffer]())
+    val emptyProduceRequest = new ProduceRequest(0, 0, new util.HashMap[TopicPartition, ByteBuffer]())
     RequestSend.serialize(emptyRequestHeader, emptyProduceRequest.toStruct)
   }
 
   case class Session(principal: KafkaPrincipal, clientAddress: InetAddress)
 
-  case class Request(processor: Int, connectionId: String, session: Session, private var buffer: ByteBuffer, startTimeMs: Long, securityProtocol: SecurityProtocol) {
+  /**
+    * 存在哪个解析器、连接id、session用于鉴权、过来的包是什么
+    * 生成的时间、安全协议
+    */
+  case class Request(processor: Int, connectionId: String, session: Session, private var buffer: ByteBuffer, startTimeMs: Long,
+                     securityProtocol: SecurityProtocol) {
     // These need to be volatile because the readers are in the network thread and the writers are in the request
     // handler threads or the purgatory threads
-    @volatile var requestDequeueTimeMs = -1L
-    @volatile var apiLocalCompleteTimeMs = -1L
-    @volatile var responseCompleteTimeMs = -1L
-    @volatile var responseDequeueTimeMs = -1L
-    @volatile var apiRemoteCompleteTimeMs = -1L
+    @volatile var requestDequeueTimeMs: Long = -1L
+    @volatile var apiLocalCompleteTimeMs: Long = -1L
+    @volatile var responseCompleteTimeMs: Long = -1L
+    @volatile var responseDequeueTimeMs: Long = -1L
+    @volatile var apiRemoteCompleteTimeMs: Long = -1L
 
-    val requestId = buffer.getShort()
+    /**
+      * 这是刚接收到的请求：
+      *
+      * 看起来这个requestId有两种，
+      * FETCH(1, "Fetch"),
+      * CONTROLLED_SHUTDOWN_KEY(7, "ControlledShutdown"),
+      *
+      * Comment on 2018/9/26 by Anur
+      */
+    val requestId: Short = buffer.getShort()
 
     // TODO: this will be removed once we migrated to client-side format
     // for server-side request / response format
     // NOTE: this map only includes the server-side request/response handlers. Newer
     // request types should only use the client-side versions which are parsed with
     // o.a.k.common.requests.AbstractRequest.getRequest()
-    private val keyToNameAndDeserializerMap: Map[Short, (ByteBuffer) => RequestOrResponse] =
+    // TODO：一旦我们将解析移到客户端去做，这个将会被移除
+    // 注意：这个map只包含服务端的 request/response 处理，较新的请求类型应当且仅为使用
+    // o.a.k.common.requests.AbstractRequest.getRequest()进行解析的客户端版本
+    private val keyToNameAndDeserializerMap: Map[Short, ByteBuffer => RequestOrResponse] =
     Map(ApiKeys.FETCH.id -> FetchRequest.readFrom,
       ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> ControlledShutdownRequest.readFrom
     )
 
     // TODO: this will be removed once we migrated to client-side format
-    val requestObj =
-      keyToNameAndDeserializerMap.get(requestId).map(readFrom => readFrom(buffer)).orNull
+    // TODO：一旦我们将解析迁移到client端，这个将会被移除
+    val requestObj: RequestOrResponse =
+    keyToNameAndDeserializerMap.get(requestId).map(readFrom => readFrom(buffer)).orNull // 获取到某个requestId，并将ByteBuffer转换为RequestOrResponse
 
     // if we failed to find a server-side mapping, then try using the
     // client-side request / response format
+    // 如果我们在找server-side映射的时候失败了，尝试使用client-side的 请求和响应 解析
     val header: RequestHeader =
     if (requestObj == null) {
       buffer.rewind
@@ -185,8 +204,9 @@ object RequestChannel extends Logging {
 }
 
 class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMetricsGroup {
-  private var responseListeners: List[Int => Unit] = Nil
   // 一个空的列表，里面装载着关于某个node_id的listener
+  private var responseListeners: List[Int => Unit] = Nil
+  // 这是刚接收到的请求
   private val requestQueue = new ArrayBlockingQueue[RequestChannel.Request](queueSize)
   // 装request的阻塞队列
   private val responseQueues = new Array[BlockingQueue[RequestChannel.Response]](numProcessors) // 装response LinkedBlockingQueue的阻塞队列
@@ -196,25 +216,27 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
   newGauge(
     "RequestQueueSize",
     new Gauge[Int] {
-      def value = requestQueue.size
+      def value: Int = requestQueue.size
     }
   )
 
   newGauge("ResponseQueueSize", new Gauge[Int] {
-    def value = responseQueues.foldLeft(0) { (total, q) => total + q.size() }
+    def value: Int = responseQueues.foldLeft(0) { (total, q) => total + q.size() }
   })
 
   for (i <- 0 until numProcessors) {
     newGauge("ResponseQueueSize",
       new Gauge[Int] {
-        def value = responseQueues(i).size()
+        def value: Int = responseQueues(i).size()
       },
       Map("processor" -> i.toString)
     )
   }
 
   /** Send a request to be handled, potentially blocking until there is room in the queue for the request
-    * 将一个request发去处理(通过socket发到broker的请求)，可能会阻塞，直到queue有空间来存放这个request */
+    * 将一个request发去处理(通过socket发到broker的请求)，可能会阻塞，直到queue有空间来存放这个request
+    *
+    * 刚接收到的请求 */
   def sendRequest(request: RequestChannel.Request) {
     requestQueue.put(request)
   }
