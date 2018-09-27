@@ -237,6 +237,7 @@ public class Fetcher<K, V> {
                     log.trace("Adding fetched record for partition {} with offset {} to buffered record list", tp, position);
                     parsedRecords = new PartitionRecords<>(fetchOffset/*请求时的那个offset*/, tp, parsed);
                     ConsumerRecord<K, V> record = parsed.get(parsed.size() - 1);
+
                     this.sensors.recordsFetchLag.record(partition.highWatermark - record.offset());
                 } else if (buffer.limit() > 0 && !skippedRecords) {// 解析为空，且buffer是有东西的
                     // we did not read a single message from a non-empty buffer

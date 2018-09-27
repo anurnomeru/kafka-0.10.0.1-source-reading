@@ -34,6 +34,7 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
 
     /**
      * Factory method for getting a request object based on ApiKey ID and a buffer
+     * 基于ApiKey id 和 buffer 来获取 request object 的工厂方法 todo 核心 重点
      */
     public static AbstractRequest getRequest(int requestId, int versionId, ByteBuffer buffer) {
         ApiKeys apiKey = ApiKeys.forId(requestId);

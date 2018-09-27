@@ -94,7 +94,7 @@ object RequestChannel extends Logging {
     val header: RequestHeader =
     if (requestObj == null) {
       buffer.rewind
-      try RequestHeader.parse(buffer)
+      try RequestHeader.parse(buffer)// 解析请求头 todo： 待看
       catch {
         case ex: Throwable =>
           throw new InvalidRequestException(s"Error parsing request header. Our best guess of the apiKey is: $requestId", ex)
@@ -105,6 +105,7 @@ object RequestChannel extends Logging {
       if (requestObj == null)
         try {
           // For unsupported version of ApiVersionsRequest, create a dummy request to enable an error response to be returned later
+          // 对于不支持的ApiVersionsRequest版本，创建一个虚拟请求来开启返回一个错误响应
           if (header.apiKey == ApiKeys.API_VERSIONS.id && !Protocol.apiVersionSupported(header.apiKey, header.apiVersion))
             new ApiVersionsRequest
           else

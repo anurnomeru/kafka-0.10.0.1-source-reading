@@ -251,7 +251,7 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
     */
   def close(channel: SocketChannel) {
     if (channel != null) {
-      debug("Closing connection from " + channel.socket.getRemoteSocketAddress())
+      debug("Closing connection from " + channel.socket.getRemoteSocketAddress)
       connectionQuotas.dec(channel.socket.getInetAddress)
       swallowError(channel.socket().close())
       swallowError(channel.close())
@@ -271,7 +271,7 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
                               connectionQuotas: ConnectionQuotas) extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
 
   // 打开一个nioSelector
-  private val nioSelector = NSelector.open()
+  private val nioSelector  = NSelector.open()
 
   val serverChannel: ServerSocketChannel = openServerSocket(endPoint.host, endPoint.port)
 
@@ -366,8 +366,8 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
       connectionQuotas.inc(socketChannel.socket().getInetAddress) // 限制一下连接
       socketChannel.configureBlocking(false)
       socketChannel.socket().setTcpNoDelay(true)
-      socketChannel.socket().setKeepAlive(true)
       socketChannel.socket().setSendBufferSize(sendBufferSize)
+      socketChannel.socket().setKeepAlive(true)
 
       debug("Accepted connection from %s on %s and assigned it to processor %d, sendBufferSize [actual|requested]: [%d|%d] recvBufferSize [actual|requested]: [%d|%d]"
         .format(socketChannel.socket.getRemoteSocketAddress, socketChannel.socket.getLocalSocketAddress, processor.id,
@@ -445,23 +445,35 @@ private[kafka] class Processor(val id: Int, // 定置化，id一共有 endPoint 
     ChannelBuilders.create(protocol, Mode.SERVER, LoginType.SERVER, channelConfigs, null, true))
 
 
-  //  processor的核心方法
+  /**
+    * processor的核心方法，有多次注册/取消OP_READ事件以及注册/取消OP_WRITE事件的操作。
+    * 以此保证每个连接上只有一个请求和一个响应，来实现请求的顺序性
+    */
   override def run() {
     startupComplete() // 通知一下主线程可以继续了
-    while (isRunning) {/** 调用shutdown就不再while了 */
+    while (isRunning) {
+      /** 调用shutdown就不再while了 */
       try {
         // setup any new connections that have been queued up
-        configureNewConnections() // 处理新连接
+        configureNewConnections() // 处理新连接 CAUTION 会让新连接关注 READ
 
         // register any new responses for writing
-        processNewResponses()
+        /**
+          * // 关注 OP_WRITE 事件
+          * // key.interestOps(key.interestOps() | ops);
+          * this.transportLayer.addInterestOps(SelectionKey.OP_WRITE)
+          *
+          * Comment on 2018/9/26 by Anur
+          */
+        processNewResponses() // CAUTION 需要response的调用kafkaChannel的send，并且关注READ，也关注WRITE
 
-        poll() // poll一波
+        poll() // poll一波，poll完就取关了WRITE，一次poll只会从
 
         // 类似于networkClient里面那个，它其实就是将收到的东西扔进 RequestChannel 的 queue 里
         // RequestChannel 是 Processor 和 Handler线程之间传递数据的队列
         // 然后取消关注READ
-        processCompletedReceives()
+        // CAUTION 核心就是 对 selector.completedReceives 进行操作
+        processCompletedReceives() // 收到一波后，取消关注READ CAUTION 完全收到以后 // 然后将它们扔进requestQueue  requestChannel.sendRequest(req)
 
         // 移除掉inflight，然后关注READ
         processCompletedSends()
@@ -500,7 +512,7 @@ private[kafka] class Processor(val id: Int, // 定置化，id一共有 endPoint 
           /** 表示这个Response需要发送给客户端，首先查找对应的KafkaChannel，为其注册OP_WRITE事件，并将KafkaChannel的Send字段指向待发送Response对象
             * 同时会将Response从responseQueue移除，放入inflightResponses中（在发完就会取消关注OP_WRITE） */
           case RequestChannel.SendAction =>
-            sendResponse(curr) // 把response返回去
+            sendResponse(curr) // 把response返回去，selector.send(response.responseSend)
 
           /** 表示断开了连接 */
           case RequestChannel.CloseConnectionAction =>

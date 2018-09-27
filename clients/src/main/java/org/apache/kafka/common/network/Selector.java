@@ -387,10 +387,7 @@ public class Selector implements Selectable {
         this.sensors.selectTime.record(endSelect - startSelect, time.milliseconds());// TODO:??????? 应该是个统计
 
         if (readyKeys > 0 || !immediatelyConnectedKeys.isEmpty()) {
-            // 这个会阻塞很久吗？
-            Set<SelectionKey> sets = this.nioSelector.selectedKeys();
-
-            pollSelectionKeys(sets, false);// 处理I/O的核心方法
+            pollSelectionKeys(this.nioSelector.selectedKeys(), false);// 处理I/O的核心方法
             pollSelectionKeys(immediatelyConnectedKeys, true);
         }
 
