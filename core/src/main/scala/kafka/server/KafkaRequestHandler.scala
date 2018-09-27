@@ -74,17 +74,23 @@ class KafkaRequestHandler(id: Int,
   def shutdown(): Unit = requestChannel.sendRequest(RequestChannel.AllDone) // 往request里面塞一个RequestChannel.AllDone，让while跳出循环（shutdown）
 }
 
+/** 简化版的线程池 */
 class KafkaRequestHandlerPool(val brokerId: Int,
                               val requestChannel: RequestChannel,
                               val apis: KafkaApis,
                               numThreads: Int) extends Logging with KafkaMetricsGroup {
 
   /* a meter to track the average free capacity of the request handlers */
-  private val aggregateIdleMeter = newMeter("RequestHandlerAvgIdlePercent", "percent", TimeUnit.NANOSECONDS)
+  private val aggregateIdleMeter: Meter = newMeter("RequestHandlerAvgIdlePercent", "percent", TimeUnit.NANOSECONDS)
 
   this.logIdent = "[Kafka Request Handler on Broker " + brokerId + "], "
+
+  // 保存KafkaRequestHandler的执行线程
   val threads = new Array[Thread](numThreads)
+
+  // KafkaRequestHandler集合
   val runnables = new Array[KafkaRequestHandler](numThreads)
+
   for (i <- 0 until numThreads) {
     runnables(i) = new KafkaRequestHandler(i, brokerId, aggregateIdleMeter, numThreads, requestChannel, apis)
     threads(i) = Utils.daemonThread("kafka-request-handler-" + i, runnables(i))
@@ -94,9 +100,9 @@ class KafkaRequestHandlerPool(val brokerId: Int,
   def shutdown() {
     info("shutting down")
     for (handler <- runnables)
-      handler.shutdown
+      handler.shutdown()
     for (thread <- threads)
-      thread.join
+      thread.join()// 一直阻塞到线程dead
     info("shut down completely")
   }
 }
@@ -107,14 +113,14 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
     case Some(topic) => Map("topic" -> topic)
   }
 
-  val messagesInRate = newMeter(BrokerTopicStats.MessagesInPerSec, "messages", TimeUnit.SECONDS, tags)
-  val bytesInRate = newMeter(BrokerTopicStats.BytesInPerSec, "bytes", TimeUnit.SECONDS, tags)
-  val bytesOutRate = newMeter(BrokerTopicStats.BytesOutPerSec, "bytes", TimeUnit.SECONDS, tags)
-  val bytesRejectedRate = newMeter(BrokerTopicStats.BytesRejectedPerSec, "bytes", TimeUnit.SECONDS, tags)
-  val failedProduceRequestRate = newMeter(BrokerTopicStats.FailedProduceRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
-  val failedFetchRequestRate = newMeter(BrokerTopicStats.FailedFetchRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
-  val totalProduceRequestRate = newMeter(BrokerTopicStats.TotalProduceRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
-  val totalFetchRequestRate = newMeter(BrokerTopicStats.TotalFetchRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
+  val messagesInRate: Meter = newMeter(BrokerTopicStats.MessagesInPerSec, "messages", TimeUnit.SECONDS, tags)
+  val bytesInRate: Meter = newMeter(BrokerTopicStats.BytesInPerSec, "bytes", TimeUnit.SECONDS, tags)
+  val bytesOutRate: Meter = newMeter(BrokerTopicStats.BytesOutPerSec, "bytes", TimeUnit.SECONDS, tags)
+  val bytesRejectedRate: Meter = newMeter(BrokerTopicStats.BytesRejectedPerSec, "bytes", TimeUnit.SECONDS, tags)
+  val failedProduceRequestRate: Meter = newMeter(BrokerTopicStats.FailedProduceRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
+  val failedFetchRequestRate: Meter = newMeter(BrokerTopicStats.FailedFetchRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
+  val totalProduceRequestRate: Meter = newMeter(BrokerTopicStats.TotalProduceRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
+  val totalFetchRequestRate: Meter = newMeter(BrokerTopicStats.TotalFetchRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
 
   def close() {
     removeMetric(BrokerTopicStats.MessagesInPerSec, tags)
