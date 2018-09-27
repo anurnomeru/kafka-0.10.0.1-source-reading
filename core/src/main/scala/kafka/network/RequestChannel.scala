@@ -35,7 +35,7 @@ import org.apache.log4j.Logger
 
 
 object RequestChannel extends Logging {
-  val AllDone = Request(processor = 1, connectionId = "2", Session(KafkaPrincipal.ANONYMOUS, InetAddress.getLocalHost), buffer = getShutdownReceive(), startTimeMs = 0, securityProtocol = SecurityProtocol.PLAINTEXT)
+  val AllDone: Request = Request(processor = 1, connectionId = "2", Session(KafkaPrincipal.ANONYMOUS, InetAddress.getLocalHost), buffer = getShutdownReceive(), startTimeMs = 0, securityProtocol = SecurityProtocol.PLAINTEXT)
 
   def getShutdownReceive() = {
     val emptyRequestHeader = new RequestHeader(ApiKeys.PRODUCE.id, "", 0)
@@ -94,7 +94,7 @@ object RequestChannel extends Logging {
     val header: RequestHeader =
     if (requestObj == null) {
       buffer.rewind
-      try RequestHeader.parse(buffer)// 解析请求头 todo： 待看
+      try RequestHeader.parse(buffer) // 解析请求头 todo： 待看
       catch {
         case ex: Throwable =>
           throw new InvalidRequestException(s"Error parsing request header. Our best guess of the apiKey is: $requestId", ex)
