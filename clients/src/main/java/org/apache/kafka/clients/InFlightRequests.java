@@ -3,9 +3,9 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -26,6 +26,7 @@ import java.util.Map;
 final class InFlightRequests {
 
     private final int maxInFlightRequestsPerConnection;
+
     private final Map<String, Deque<ClientRequest>> requests = new HashMap<String, Deque<ClientRequest>>();
 
     public InFlightRequests(int maxInFlightRequestsPerConnection) {
@@ -36,10 +37,12 @@ final class InFlightRequests {
      * Add the given request to the queue for the connection it was directed to
      */
     public void add(ClientRequest request) {
-        Deque<ClientRequest> reqs = this.requests.get(request.request().destination());
+        Deque<ClientRequest> reqs = this.requests.get(request.request()
+                                                             .destination());
         if (reqs == null) {
             reqs = new ArrayDeque<>();
-            this.requests.put(request.request().destination(), reqs);
+            this.requests.put(request.request()
+                                     .destination(), reqs);
         }
         reqs.addFirst(request);
     }
@@ -49,8 +52,9 @@ final class InFlightRequests {
      */
     private Deque<ClientRequest> requestQueue(String node) {
         Deque<ClientRequest> reqs = requests.get(node);
-        if (reqs == null || reqs.isEmpty())
+        if (reqs == null || reqs.isEmpty()) {
             throw new IllegalStateException("Response from server for which there are no in-flight requests.");
+        }
         return reqs;
     }
 
@@ -80,14 +84,23 @@ final class InFlightRequests {
 
     /**
      * Can we send more requests to this node?
-     * 
+     *
      * @param node Node in question
      * @return true iff we have no requests still being sent to the given node
      */
     public boolean canSendMore(String node) {
         Deque<ClientRequest> queue = requests.get(node);
+
+        if (queue != null) {
+            System.out.println(queue.peekFirst()
+                                    .request()
+                                    .completed());
+        }
+
         return queue == null || queue.isEmpty() ||
-               (queue.peekFirst().request().completed() && queue.size() < this.maxInFlightRequestsPerConnection);
+            (queue.peekFirst()
+                  .request()
+                  .completed() && queue.size() < this.maxInFlightRequestsPerConnection);
     }
 
     /**
@@ -112,7 +125,7 @@ final class InFlightRequests {
 
     /**
      * Clear out all the in-flight requests for the given node and return them
-     * 
+     *
      * @param node The node
      * @return All the in-flight requests for that node that have been removed
      */
@@ -136,7 +149,8 @@ final class InFlightRequests {
         List<String> nodeIds = new LinkedList<String>();
         for (String nodeId : requests.keySet()) {
             if (inFlightRequestCount(nodeId) > 0) {
-                ClientRequest request = requests.get(nodeId).peekLast();
+                ClientRequest request = requests.get(nodeId)
+                                                .peekLast();
                 long timeSinceSend = now - request.sendTimeMs();
                 if (timeSinceSend > requestTimeout) {
                     nodeIds.add(nodeId);

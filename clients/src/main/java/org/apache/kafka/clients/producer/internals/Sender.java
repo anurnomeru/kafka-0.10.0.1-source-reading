@@ -240,8 +240,9 @@ public class Sender implements Runnable {
         }
 
         /** 8、将ClientRequest写入KafkaChannel中的send字段 */
-        for (ClientRequest request : requests)
+        for (ClientRequest request : requests) {
             client.send(request, now);
+        }
 
         /** 9、真正的把消息发送出去，并处理客户端的ack，处理超时请求，调用用户自定义的Callback等。*/
         // if some partitions are already ready to be sent, the select time would be 0;
