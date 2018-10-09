@@ -32,7 +32,7 @@ public class Producer extends Thread {
     private final Boolean isAsync;
 
     public static void main(String[] args) {
-        Producer producer = new Producer("myTest", true);
+        Producer producer = new Producer("KafkaLearning", true);
         producer.run();
     }
 

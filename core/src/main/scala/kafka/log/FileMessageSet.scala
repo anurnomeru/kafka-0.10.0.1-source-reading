@@ -36,6 +36,9 @@ import scala.collection.mutable.ArrayBuffer
 /**
  * An on-disk message set. An optional start and end position can be applied to the message set
  * which will allow slicing a subset of the file.
+  *
+  * 一个存储于磁盘的消息集合。可以对消息集合应用可选的开始与结束位置，
+  *
  * @param file The file name for the underlying log data
  * @param channel the underlying file channel used
  * @param start A lower bound on the absolute position in the file from which the message set begins
@@ -52,6 +55,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
   /* the size of the message set in bytes */
   private val _size =
     if(isSlice)
+      // 只是切片视角，是不需要检查file大小的
       new AtomicInteger(end - start) // don't check the file size if this is just a slice view
     else
       new AtomicInteger(math.min(channel.size.toInt, end) - start)
@@ -83,7 +87,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
       this(file,
         channel = FileMessageSet.openChannel(file, mutable = true, fileAlreadyExists, initFileSize, preallocate),
         start = 0,
-        end = ( if ( !fileAlreadyExists && preallocate ) 0 else Int.MaxValue),
+        end = if ( !fileAlreadyExists && preallocate ) 0 else Int.MaxValue,
         isSlice = false)
 
   /**

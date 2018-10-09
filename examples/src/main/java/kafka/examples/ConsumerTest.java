@@ -6,7 +6,7 @@ package kafka.examples;
 public class ConsumerTest {
 
     public static void main(String[] args) {
-        Consumer consumerThread = new Consumer("myTest");
+        Consumer consumerThread = new Consumer("KafkaLearning");
         consumerThread.start();
     }
 }

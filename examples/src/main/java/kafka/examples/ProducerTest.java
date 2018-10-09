@@ -34,7 +34,7 @@ public class ProducerTest extends Thread {
     private final Boolean isAsync;
 
     public static void main(String[] args) {
-        ProducerTest producer = new ProducerTest("myTest", false);
+        ProducerTest producer = new ProducerTest("KafkaLearning", true);
         producer.run();
         //                Consumer consumerThread = new Consumer("myTest");
         //        consumerThread.start();
