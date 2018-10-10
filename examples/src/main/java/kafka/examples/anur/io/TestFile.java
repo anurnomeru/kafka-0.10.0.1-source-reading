@@ -2,6 +2,10 @@ package kafka.examples.anur.io;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.channels.GatheringByteChannel;
+
 /**
  * Created by Anur IjuoKaruKas on 2018/10/9
  */
@@ -9,14 +13,27 @@ public class TestFile {
 
     public static void main(String[] args) throws IOException {
         RandomAccessFile randomAccessFile = new RandomAccessFile("C:\\Users\\Anur\\Desktop\\test.txt", "rw");
-        randomAccessFile.writeInt(99);
-        randomAccessFile.writeUTF("测试测试");
 
-        randomAccessFile.seek(0);
-        byte[] bytes = new byte[100];
+        GatheringByteChannel channel = randomAccessFile.getChannel();
 
-        while (randomAccessFile.read(bytes) > 0) {
-            System.out.println(new String(bytes));
+        ((FileChannel) channel).position(((FileChannel) channel).size());
+        for (int j = 0; j < 100; j++) {
+
+            ByteBuffer byteBuffer = ByteBuffer.allocate(100);
+
+            for (int i = 0; i < 99; i++) {
+                byteBuffer.put(new byte[] {127});
+            }
+
+            int limit = byteBuffer.position();
+
+            byteBuffer.flip();
+
+            int write = 0;
+
+            while (write < limit) {
+                write += channel.write(byteBuffer);
+            }
         }
     }
 }

@@ -65,6 +65,7 @@ class FileMessageSet private[kafka](@volatile var file: File, // 对应磁盘上
   // 如果不是切片，是全文件，将文件指针更新到文件的末尾
   if (!isSlice)
   /* set the file position to the last byte in the file */
+  /* 将指针移动到文件末尾或指定了的末尾 */
     channel.position(math.min(channel.size.toInt, end))
 
   /**
@@ -136,13 +137,14 @@ class FileMessageSet private[kafka](@volatile var file: File, // 对应磁盘上
     * @param startingPosition The starting position in the file to begin searching from.
     */
   def searchFor(targetOffset: Long, startingPosition: Int): OffsetPosition = {
-    var position = startingPosition// 从指定的位置开始
+    var position = startingPosition
+    // 从指定的位置开始
     val buffer = ByteBuffer.allocate(MessageSet.LogOverhead)
-    val size = sizeInBytes()// 当前FileMessageSet的大小（字节）
+    val size = sizeInBytes() // 当前FileMessageSet的大小（字节）
     while (position + MessageSet.LogOverhead < size) {
       buffer.rewind()
       channel.read(buffer, position)
-      if (buffer.hasRemaining)// buffer没读完，可能是这个消息卒了
+      if (buffer.hasRemaining) // buffer没读完，可能是这个消息卒了
         throw new IllegalStateException("Failed to read complete buffer for targetOffset %d startPosition %d in %s"
           .format(targetOffset, startingPosition, file.getAbsolutePath))
       buffer.rewind()
