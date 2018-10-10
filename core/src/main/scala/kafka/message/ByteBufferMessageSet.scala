@@ -295,11 +295,11 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
 
   /** Write the messages in this set to the given channel */
   def writeFullyTo(channel: GatheringByteChannel): Int = {
-    buffer.mark()
+    buffer.mark()// 标记一下当前位置
     var written = 0
     while (written < sizeInBytes)
       written += channel.write(buffer)
-    buffer.reset()
+    buffer.reset()// 重置位置到刚才标记的位置？为什么要这样？
     written
   }
 
