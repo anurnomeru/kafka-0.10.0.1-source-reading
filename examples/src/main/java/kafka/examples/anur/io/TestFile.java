@@ -12,6 +12,15 @@ import java.nio.channels.GatheringByteChannel;
 public class TestFile {
 
     public static void main(String[] args) throws IOException {
+
+        ByteBuffer byteBuffer = ByteBuffer.allocate(100);
+        byteBuffer.putInt(10);
+        byteBuffer.putLong(88);
+
+        byteBuffer.flip();
+        System.out.println(byteBuffer.getLong());
+        System.out.println(byteBuffer.getInt());
+
         RandomAccessFile randomAccessFile = new RandomAccessFile("C:\\Users\\Anur\\Desktop\\test.txt", "rw");
 
         GatheringByteChannel channel = randomAccessFile.getChannel();
@@ -19,7 +28,7 @@ public class TestFile {
         ((FileChannel) channel).position(((FileChannel) channel).size());
         for (int j = 0; j < 100; j++) {
 
-            ByteBuffer byteBuffer = ByteBuffer.allocate(100);
+            byteBuffer = ByteBuffer.allocate(100);
 
             for (int i = 0; i < 99; i++) {
                 byteBuffer.put(new byte[] {127});

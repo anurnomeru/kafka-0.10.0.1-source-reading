@@ -114,6 +114,8 @@ class FileMessageSet private[kafka](@volatile var file: File, // 对应磁盘上
     *
     * If this message set is already sliced, the position will be taken relative to that slicing.
     *
+    * 返回当前FileMessageSet中的一部分FileMessageSet
+    *
     * @param position The start position to begin the read from
     * @param size     The number of bytes after the start position to include
     * @return A sliced wrapper on this message set limited based on the given position and size
@@ -125,13 +127,17 @@ class FileMessageSet private[kafka](@volatile var file: File, // 对应磁盘上
       throw new IllegalArgumentException("Invalid size: " + size)
     new FileMessageSet(file,
       channel,
-      start = this.start + position,
+      start = this.start + position, // todo：这里需要研究一下这个position从哪里来的
       end = math.min(this.start + position + size, sizeInBytes()))
   }
 
   /**
     * Search forward for the file position of the last offset that is greater than or equal to the target offset
     * and return its physical position. If no such offsets are found, return null.
+    *
+    * 向前搜索最后一个大于或者等于目标offset的物理地址，并且会返回它的物理地址。如果找不到这个offset，返回null
+    *
+    * 看代码是搜从startingPosition开始，找到第一个大于等于目标offset的物理地址
     *
     * @param targetOffset     The offset to search for.
     * @param startingPosition The starting position in the file to begin searching from.
@@ -140,17 +146,19 @@ class FileMessageSet private[kafka](@volatile var file: File, // 对应磁盘上
     var position = startingPosition
     // 从指定的位置开始
     val buffer = ByteBuffer.allocate(MessageSet.LogOverhead)
-    val size = sizeInBytes() // 当前FileMessageSet的大小（字节）
+    val size = sizeInBytes() // 当前FileMessageSet的大小（字节）// _size.get()
     while (position + MessageSet.LogOverhead < size) {
-      buffer.rewind()
-      channel.read(buffer, position)
+
+      buffer.rewind() // 重置一下buffer指针
+      channel.read(buffer, position) // 从这个位置开始，读满buffer（读个LogOverhead，也就是 8字节offset + 4字节size ）
       if (buffer.hasRemaining) // buffer没读完，可能是这个消息卒了
         throw new IllegalStateException("Failed to read complete buffer for targetOffset %d startPosition %d in %s"
           .format(targetOffset, startingPosition, file.getAbsolutePath))
-      buffer.rewind()
+      buffer.rewind() // 重置一下buffer指针
+
       val offset = buffer.getLong()
       if (offset >= targetOffset)
-        return OffsetPosition(offset, position)
+        return new OffsetPosition(offset, position)
       val messageSize = buffer.getInt()
       if (messageSize < Message.MinMessageOverhead)
         throw new IllegalStateException("Invalid message size: " + messageSize)
@@ -353,6 +361,13 @@ class FileMessageSet private[kafka](@volatile var file: File, // 对应磁盘上
     * size of the underlying FileChannel.
     * It is expected that no other threads will do writes to the log when this function is called.
     *
+    * 分割这个file message set到指定的字节大小，注意这个API不会检查参数size是否在有效的边界上
+    *
+    * 在一些JDK版本分割到相同大小的file message set将会导致文件的修改时间(mTime)被修改，所以truncate只会
+    * 在targetSize比当前FileChannel小的时候有效 CAUTION：  if (targetSize < channel.size.toInt) {
+    *
+    * It is expected ，当这个方法被调用的时候，没有其它的线程会对log进行写操作。
+    *
     * @param targetSize The size to truncate to. Must be between 0 and sizeInBytes.
     * @return The number of bytes truncated off
     */
@@ -368,9 +383,11 @@ class FileMessageSet private[kafka](@volatile var file: File, // 对应磁盘上
     }
     originalSize - targetSize
   }
-
+`
   /**
     * Read from the underlying file into the buffer starting at the given position
+    *
+    * 从当前文件指定的物理位置读取数据到buffer，直到读满
     */
   def readInto(buffer: ByteBuffer, relativePosition: Int): ByteBuffer = {
     channel.read(buffer, relativePosition + this.start)
