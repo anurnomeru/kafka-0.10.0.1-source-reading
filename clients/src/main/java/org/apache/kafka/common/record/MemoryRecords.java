@@ -251,17 +251,22 @@ public class MemoryRecords implements Records {
 
         private final ByteBuffer buffer;
 
+        // buffer 输入流
         private final DataInputStream stream;
 
+        // 压缩类型
         private final CompressionType type;
 
+        // 是否压缩（是否使用深层迭代器）
         private final boolean shallow;
 
+        // 迭代压缩消息的迭代器
         private RecordsIterator innerIter;
 
         // The variables for inner iterator
         private final ArrayDeque<LogEntry> logEntries;
 
+        // 记录第一个消息的offset
         private final long absoluteBaseOffset;
 
         public RecordsIterator(ByteBuffer buffer, boolean shallow) {
@@ -282,7 +287,7 @@ public class MemoryRecords implements Records {
             this.shallow = true;
             this.stream = Compressor.wrapForInput(new ByteBufferInputStream(this.buffer), type, entry.record()
                                                                                                      .magic());
-            long wrapperRecordOffset = entry.offset();
+            long wrapperRecordOffset = entry.offset();// 外层消息offset
             // If relative offset is used, we need to decompress the entire message first to compute
             // the absolute offset.
             if (entry.record()
@@ -290,11 +295,12 @@ public class MemoryRecords implements Records {
                 this.logEntries = new ArrayDeque<>();
                 long wrapperRecordTimestamp = entry.record()
                                                    .timestamp();
-                while (true) {
+                while (true) {// 将内层的消息全部解压出来并添加到logEntries集合中
                     try {
                         LogEntry logEntry = getNextEntryFromStream();
-                        Record recordWithTimestamp = new Record(logEntry.record()
-                                                                        .buffer(),
+                        Record recordWithTimestamp = new Record(
+                            logEntry.record()
+                                    .buffer(),
                             wrapperRecordTimestamp,
                             entry.record()
                                  .timestampType());
