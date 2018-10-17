@@ -1,22 +1,22 @@
 /**
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+  * Licensed to the Apache Software Foundation (ASF) under one or more
+  * contributor license agreements.  See the NOTICE file distributed with
+  * this work for additional information regarding copyright ownership.
+  * The ASF licenses this file to You under the Apache License, Version 2.0
+  * (the "License"); you may not use this file except in compliance with
+  * the License.  You may obtain a copy of the License at
+  *
+  * http://www.apache.org/licenses/LICENSE-2.0
+  *
+  * Unless required by applicable law or agreed to in writing, software
+  * distributed under the License is distributed on an "AS IS" BASIS,
+  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
+  */
 package kafka.utils.timer
 
-import java.util.concurrent.{DelayQueue, Executors, ThreadFactory, TimeUnit}
+import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
@@ -27,6 +27,7 @@ trait Timer {
   /**
     * Add a new task to this executor. It will be executed after the task's delay
     * (beginning from the time of submission)
+    *
     * @param timerTask the task to add
     */
   def add(timerTask: TimerTask): Unit
@@ -34,6 +35,7 @@ trait Timer {
   /**
     * Advance the internal clock, executing any tasks whose expiration has been
     * reached within the duration of the passed timeout.
+    *
     * @param timeoutMs
     * @return whether or not any tasks were executed
     */
@@ -41,6 +43,7 @@ trait Timer {
 
   /**
     * Get the number of tasks pending execution
+    *
     * @return the number of tasks
     */
   def size: Int
@@ -58,20 +61,20 @@ class SystemTimer(executorName: String,
                   startMs: Long = System.currentTimeMillis) extends Timer {
 
   // timeout timer
-  private[this] val taskExecutor = Executors.newFixedThreadPool(1, new ThreadFactory() {
+  private[this] val taskExecutor: ExecutorService = Executors.newFixedThreadPool(1, new ThreadFactory() {
     def newThread(runnable: Runnable): Thread =
-      Utils.newThread("executor-"+executorName, runnable, false)
-  })
+      Utils.newThread("executor-" + executorName, runnable, false)
+  }) // 只有一个线程的无限阻塞队列线程池
 
-  private[this] val delayQueue = new DelayQueue[TimerTaskList]()
-  private[this] val taskCounter = new AtomicInteger(0)
+  private[this] val delayQueue = new DelayQueue[TimerTaskList]()// 全局唯一的队列，主要作用是阻塞推进时间轮表针的线程，等待最近到期任务到期
+  private[this] val taskCounter = new AtomicInteger(0)// 全局的任务个数计数器
   private[this] val timingWheel = new TimingWheel(
     tickMs = tickMs,
     wheelSize = wheelSize,
     startMs = startMs,
     taskCounter = taskCounter,
     delayQueue
-  )
+  )// 最底层的时间轮
 
   // Locks used to protect data structures while ticking
   private[this] val readWriteLock = new ReentrantReadWriteLock()

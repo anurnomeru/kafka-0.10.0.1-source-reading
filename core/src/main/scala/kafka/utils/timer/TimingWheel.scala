@@ -1,25 +1,25 @@
 /**
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+  * Licensed to the Apache Software Foundation (ASF) under one or more
+  * contributor license agreements.  See the NOTICE file distributed with
+  * this work for additional information regarding copyright ownership.
+  * The ASF licenses this file to You under the Apache License, Version 2.0
+  * (the "License"); you may not use this file except in compliance with
+  * the License.  You may obtain a copy of the License at
+  *
+  * http://www.apache.org/licenses/LICENSE-2.0
+  *
+  * Unless required by applicable law or agreed to in writing, software
+  * distributed under the License is distributed on an "AS IS" BASIS,
+  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
+  */
 package kafka.utils.timer
-
-import kafka.utils.nonthreadsafe
 
 import java.util.concurrent.DelayQueue
 import java.util.concurrent.atomic.AtomicInteger
+
+import kafka.utils.nonthreadsafe
 
 /*
  * Hierarchical Timing Wheels
@@ -99,42 +99,52 @@ import java.util.concurrent.atomic.AtomicInteger
 @nonthreadsafe
 private[timer] class TimingWheel(tickMs: Long, wheelSize: Int, startMs: Long, taskCounter: AtomicInteger, queue: DelayQueue[TimerTaskList]) {
 
-  private[this] val interval = tickMs * wheelSize
-  private[this] val buckets = Array.tabulate[TimerTaskList](wheelSize) { _ => new TimerTaskList(taskCounter) }
+  // tickMs  表示一个槽所代表的时间范围
+  // wheelSize  表示有多少个槽
+  // startMs  开始时间
+  // taskCounter  总任务数
+  // queue  延迟队列，每个槽都有自己的TimerTaskList
 
-  private[this] var currentTime = startMs - (startMs % tickMs) // rounding down to multiple of tickMs
+  private[this] val interval = tickMs * wheelSize // 能表示的时间跨度
+  private[this] val buckets = Array.tabulate[TimerTaskList](wheelSize) { _ => new TimerTaskList(taskCounter) } // 这是一个一个的槽
+
+  private[this] var currentTime = startMs - (startMs % tickMs) // rounding down to multiple of tickMs // 稍微修剪一下
 
   // overflowWheel can potentially be updated and read by two concurrent threads through add().
   // Therefore, it needs to be volatile due to the issue of Double-Checked Locking pattern with JVM
+  // 上层时间轮可能会通过add()同时被两个线程修改和访问
+  // 所以它需要被标记为volatile因为JVM的双重检查锁
   @volatile private[this] var overflowWheel: TimingWheel = null
 
   private[this] def addOverflowWheel(): Unit = {
     synchronized {
       if (overflowWheel == null) {
         overflowWheel = new TimingWheel(
-          tickMs = interval,
-          wheelSize = wheelSize,
-          startMs = currentTime,
-          taskCounter = taskCounter,
-          queue
+          tickMs = interval, // 上面的那个时间轮的【一个槽】 = 当前这个时间轮的时间跨度
+          wheelSize = wheelSize, // 有多少个槽
+          startMs = currentTime, // 同步一下时间
+          taskCounter = taskCounter, // ？？
+          queue // DelayQueue[TimerTaskList] 为什么用同一个queue，CAUTION： 因为这个是全局唯一的任务计数器
         )
       }
     }
   }
 
   def add(timerTaskEntry: TimerTaskEntry): Boolean = {
-    val expiration = timerTaskEntry.expirationMs
+    val expiration = timerTaskEntry.expirationMs // 截至
 
     if (timerTaskEntry.cancelled) {
+      // 如果已经被取消了，直接失败
       // Cancelled
       false
     } else if (expiration < currentTime + tickMs) {
+      // 如果已经超时了
       // Already expired
       false
     } else if (expiration < currentTime + interval) {
       // Put in its own bucket
-      val virtualId = expiration / tickMs
-      val bucket = buckets((virtualId % wheelSize.toLong).toInt)
+      val virtualId = expiration / tickMs // 有点像哈希，找时间槽
+      val bucket: TimerTaskList = buckets((virtualId % wheelSize.toLong).toInt)
       bucket.add(timerTaskEntry)
 
       // Set the bucket expiration time
@@ -144,6 +154,9 @@ private[timer] class TimingWheel(tickMs: Long, wheelSize: Int, startMs: Long, ta
         // and the previous buckets gets reused; further calls to set the expiration within the same wheel cycle
         // will pass in the same value and hence return false, thus the bucket with the same expiration will not
         // be enqueued multiple times.
+
+        // 如果说一个bucket已经过期了，那么它需要重新入队。我们只需要将过期时间修改了的bucket进行入队
+        // 比如时间轮已经跑了一圈了并且之前的bucket们被拿出来重新使用
         queue.offer(bucket)
       }
       true
@@ -156,6 +169,7 @@ private[timer] class TimingWheel(tickMs: Long, wheelSize: Int, startMs: Long, ta
 
   // Try to advance the clock
   def advanceClock(timeMs: Long): Unit = {
+    // 尝试移动表针
     if (timeMs >= currentTime + tickMs) {
       currentTime = timeMs - (timeMs % tickMs)
 
