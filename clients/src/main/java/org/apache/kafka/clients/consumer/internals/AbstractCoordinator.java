@@ -269,7 +269,7 @@ public abstract class AbstractCoordinator implements Closeable {
             onJoinPrepare(generation, memberId);// 这个准备会做三件事
             // 1、如果开启了自动提交offset则会进行同步提交offset（可能阻塞）
             // 2、调用 Subscription 中ConsumerRebalance中ConsumerRebalance中的回调方法
-            // 3、设置needsPartitionAssignment 为true，收缩groupSubscription集合
+            // 3、设置needsPartitionAssignment 为true，搜索groupSubscription集合
             needsJoinPrepare = false;
         }
 
@@ -288,7 +288,8 @@ public abstract class AbstractCoordinator implements Closeable {
             //
             // 2、###### 在 JoinGroupResponseHandler 的处理中，会去chain这个 futureJoin
             //
-            // 3、来到了SyncGroupResponseHandler，发送一个新的 client 请求，将其compose成 RequestFuture<ByteBuffer> futureSync，在这个client成功后，会调用 onSuccess，触发 SyncGroupResponseHandler 的onSuccess
+            // 3、来到了SyncGroupResponseHandler，发送一个新的 client 请求，将其compose成 RequestFuture<ByteBuffer> futureSync，
+            // 在这个client成功后，会调用 onSuccess，触发 SyncGroupResponseHandler 的onSuccess
             //
             // 4、在 SyncGroupResponseHandler的处理中，如果正确返回，触发之前chain这个的 futrueJoin，才是真正的成功了
             //
