@@ -119,6 +119,8 @@ object DelayedOperationPurgatory {
   * A helper purgatory class for bookkeeping delayed operations with a timeout, and expiring timed out operations.
   *
   * 管理DelayedOperation，处理到期的DelayedOperation，比如说 {@link DelayedProduce}
+  *
+  * 延迟任务的炼狱 DelayedOperationPurgatory （消费延迟任务）
   */
 class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
                                                        timeoutTimer: Timer,
@@ -128,14 +130,20 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
   extends Logging with KafkaMetricsGroup {
 
   /* a list of operation watching keys */
+  /**
+    * 可以根据某个key获取到对应的Watchers（延迟任务队列）
+    */
   private val watchersForKey = new Pool[Any, Watchers /* 表示一个DelayedOperation的集合（linkedList） */ ](Some((key: Any) => new Watchers(key)))
 
   private val removeWatchersLock = new ReentrantReadWriteLock()
 
   // the number of estimated total operations in the purgatory
+  /** 这个operation下的任务总数 */
   private[this] val estimatedTotalOperations = new AtomicInteger(0)
 
   /* background thread expiring operations that have timed out */
+  /** 它有两个功能，一个是推进时间轮表针，另一个是定期清理watchersForKey中已经完成的DelayedOperation，清理条件由
+    * purgeInterval字段指定。在DelayedOperationPurgatory初始化时会启动此线程 */
   private val expirationReaper = new ExpiredOperationReaper()
 
   private val metricsTags = Map("delayedOperation" -> purgatoryName)
@@ -294,7 +302,7 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
     */
   private class Watchers(val key: Any) {
 
-    private[this] val operations = new LinkedList[T]()
+    private[this] val operations = new LinkedList[T]() // 用于管理DelayedOperation的队列
 
     def watched: Int = operations synchronized operations.size
 
