@@ -29,6 +29,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 
 import scala.collection._
 
+// 关心的对象是TopicPartitionOperationKey，表示某个Topic中的某个分区。
 case class ProducePartitionStatus(requiredOffset: Long, responseStatus: PartitionResponse) {
   @volatile var acksPending = false
 
