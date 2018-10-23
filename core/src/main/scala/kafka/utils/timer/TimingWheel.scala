@@ -143,7 +143,7 @@ private[timer] class TimingWheel(tickMs: Long, wheelSize: Int, startMs: Long, ta
       false
     } else if (expiration < currentTime + interval) {
       // Put in its own bucket
-      val virtualId = expiration / tickMs // 有点像哈希，找时间槽
+      val virtualId: Long = expiration / tickMs // 有点像哈希，找时间槽
       val bucket: TimerTaskList = buckets((virtualId % wheelSize.toLong).toInt)
       bucket.add(timerTaskEntry)
 

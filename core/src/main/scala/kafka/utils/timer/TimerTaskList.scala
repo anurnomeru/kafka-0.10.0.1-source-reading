@@ -76,11 +76,15 @@ private[timer] class TimerTaskList(taskCounter: AtomicInteger) extends Delayed {
           if (timerTaskEntry.list == null) {
             // put the timer task entry to the end of the list. (root.prev points to the tail entry)
             val tail = root.prev
+
             timerTaskEntry.next = root
             timerTaskEntry.prev = tail
+
             timerTaskEntry.list = this
+
             tail.next = timerTaskEntry
             root.prev = timerTaskEntry
+
             taskCounter.incrementAndGet()
             done = true
           }
