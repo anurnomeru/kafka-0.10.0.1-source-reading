@@ -322,6 +322,8 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   /**
    * Handle a produce request
+    *
+    * 处理Producer的请求
    */
   def handleProducerRequest(request: RequestChannel.Request) {
     val produceRequest:ProduceRequest = request.body.asInstanceOf[ProduceRequest]
@@ -402,6 +404,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       // call the replica manager to append messages to the replicas
+      // 调用副本manager来追加消息到副本们
       replicaManager.appendMessages(
         produceRequest.timeout.toLong,
         produceRequest.acks,

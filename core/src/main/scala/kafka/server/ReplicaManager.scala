@@ -319,6 +319,9 @@ class ReplicaManager(val config: KafkaConfig,
   /**
    * Append messages to leader replicas of the partition, and wait for them to be replicated to other replicas;
    * the callback function will be triggered either when timeout or the required acks are satisfied
+    *
+    * 将消息追加到分区的leader副本，并且等待他们复制到另外的副本上：
+    * 当超时或者满足ack后，回调函数将会被触发
    */
   def appendMessages(timeout: Long,
                      requiredAcks: Short,
@@ -328,6 +331,8 @@ class ReplicaManager(val config: KafkaConfig,
 
     if (isValidRequiredAcks(requiredAcks)) {
       val sTime = SystemTime.milliseconds
+
+      // 将消息追加到Log中，同时还会检测delayedFetchPurgatory中相关key对应的
       val localProduceResults = appendToLocalLog(internalTopicsAllowed, messagesPerPartition, requiredAcks)
       debug("Produce to local log in %d ms".format(SystemTime.milliseconds - sTime))
 
