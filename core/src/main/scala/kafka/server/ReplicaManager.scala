@@ -324,7 +324,7 @@ class ReplicaManager(val config: KafkaConfig,
   def appendMessages(timeout: Long,
                      requiredAcks: Short,
                      internalTopicsAllowed: Boolean,
-                     messagesPerPartition: Map[TopicPartition, MessageSet],
+                     messagesPerPartition: Map[TopicPartition, MessageSet]/* auth信息 */,
                      responseCallback: Map[TopicPartition, PartitionResponse] => Unit) {
 
     if (isValidRequiredAcks(requiredAcks)) {
