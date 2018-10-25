@@ -52,6 +52,11 @@ case class ProducePartitionStatus(requiredOffset: Long, responseStatus: Partitio
 
 /**
   * The produce metadata maintained by the delayed produce operation
+  *
+  * 通过delayed produce 操作来维护produce的metadata
+  *
+  * 里面其实就是一个需不需要ack
+  * 一个Map，维护TP和TP状态
   */
 case class ProduceMetadata(produceRequiredAcks: Short,
                            produceStatus: Map[TopicPartition, ProducePartitionStatus]) {
@@ -63,14 +68,18 @@ case class ProduceMetadata(produceRequiredAcks: Short,
 /**
   * A delayed produce operation that can be created by the replica manager and watched
   * in the produce operation purgatory
+  *
+  * 一个延迟的生产操作可以被replica manager所管理，并且被 produce operation purgatory所监控
   */
 class DelayedProduce(delayMs: Long,
-                     produceMetadata: ProduceMetadata,
+                     produceMetadata: ProduceMetadata, // 为一个ProducerRequest中的所有相关分区记录了一些追加消息后的返回结果，
+                     // 主要用于判断DelayedProduce是否满足执行条件
                      replicaManager: ReplicaManager,
                      responseCallback: Map[TopicPartition, PartitionResponse] => Unit)
   extends DelayedOperation(delayMs) {
 
   // first update the acks pending variable according to the error code
+  // 首先 根据错误码来更新 ack 追加的值
   produceMetadata.produceStatus.foreach { case (topicPartition, status) =>
     if (status.responseStatus.errorCode == Errors.NONE.code) {
       // Timeout error state will be cleared when required acks are received
@@ -95,7 +104,7 @@ class DelayedProduce(delayMs: Long,
     */
   override def tryComplete(): Boolean = {
     // check for each partition if it still has pending acks
-    produceMetadata.produceStatus.foreach { case (topicAndPartition, status) =>
+    produceMetadata.produceStatus.foreach { case (topicAndPartition, status)/* TopicPartition, ProducePartitionStatus */ =>
       trace("Checking produce satisfaction for %s, current status %s"
         .format(topicAndPartition, status))
       // skip those partitions that have already been satisfied

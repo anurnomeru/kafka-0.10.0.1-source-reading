@@ -322,32 +322,38 @@ class ReplicaManager(val config: KafkaConfig,
     * 当超时或者满足ack后，回调函数将会被触发
     */
   def appendMessages(timeout: Long,
-                     requiredAcks: Short,
+                     requiredAcks: Short, // 这是ProducerRequest中追加到此分区的最后一个消息的offset，它会参与判断DelayedProduce是否符合执行条件
                      internalTopicsAllowed: Boolean,
-                     messagesPerPartition: Map[TopicPartition, MessageSet]/* auth信息 */,
+                     messagesPerPartition: Map[TopicPartition, MessageSet] /* auth信息 */ ,
                      responseCallback: Map[TopicPartition, PartitionResponse] => Unit) {
 
     if (isValidRequiredAcks(requiredAcks)) {
-      val sTime = SystemTime.milliseconds
+      // 检测acks参数是否有效
+      val sTime: Long = SystemTime.milliseconds
 
-      // 将消息追加到Log中，同时还会检测delayedFetchPurgatory中相关key对应的DelayFetch，满足条件则讲其执行完成
-      val localProduceResults: Map[TopicPartition, LogAppendResult] = appendToLocalLog(internalTopicsAllowed, messagesPerPartition, requiredAcks)
+      // 将消息追加到本地副本Log中，同时还会检测delayedFetchPurgatory中相关key对应的DelayFetch，满足条件则讲其执行完成
+      val localProduceResults: Map[TopicPartition, LogAppendResult] =
+        appendToLocalLog(internalTopicsAllowed, messagesPerPartition, requiredAcks)
       debug("Produce to local log in %d ms".format(SystemTime.milliseconds - sTime))
 
-      // 对追加的结果进行转换
-      val produceStatus: Map[TopicPartition, ProducePartitionStatus] = localProduceResults.map { case (topicPartition, result) =>
-        topicPartition ->
-          ProducePartitionStatus(
-            result.info.lastOffset + 1, // required offset
-            new PartitionResponse(result.errorCode, result.info.firstOffset, result.info.timestamp)) // response status
-      }
+      // 对追加的结果进行转换，也就是将 LogAppendResult => ProducePartitionStatus，追加情况转换为 response，返回给client
+      val produceStatus: Map[TopicPartition, ProducePartitionStatus] =
+        localProduceResults.map { case (topicPartition, result) =>
+          topicPartition ->
+            ProducePartitionStatus(
+              result.info.lastOffset + 1, // required offset
+              new PartitionResponse(result.errorCode, result.info.firstOffset, result.info.timestamp)) // response status
+        }
 
       // 下面检测是否生成delayedProduce，其中一个条件就是检测ProduceRequest中的acks字段是或否为-1
       if (delayedRequestRequired(requiredAcks, messagesPerPartition, localProduceResults)) {
         // create delayed produce operation
         // 创建DelayedProduce对象
-        val produceMetadata = ProduceMetadata(requiredAcks, produceStatus)
-        val delayedProduce = new DelayedProduce(timeout, produceMetadata, this, responseCallback)
+        val produceMetadata: ProduceMetadata = ProduceMetadata(requiredAcks, produceStatus)
+
+
+        // 这个delayProduce继承了DelayedOperation延迟任务，最后交给DelayedOperationPurgatory延迟消息队列管理
+        val delayedProduce: DelayedProduce = new DelayedProduce(timeout, produceMetadata, this, responseCallback)
 
         // create a list of (topic, partition) pairs to use as keys for this delayed produce operation
         val producerRequestKeys = messagesPerPartition.keys.map(new TopicPartitionOperationKey(_)).toSeq
@@ -364,6 +370,9 @@ class ReplicaManager(val config: KafkaConfig,
         responseCallback(produceResponseStatus)
       }
     } else {
+      // 如果所需的acks参数草畜了可接受范围，可能是client有什么搞错了
+      // 这里仅返回错误信息，而且不会对请求进行处理
+
       // If required.acks is outside accepted range, something is wrong with the client
       // Just return an error and don't handle the request at all
       val responseStatus = messagesPerPartition.map {
