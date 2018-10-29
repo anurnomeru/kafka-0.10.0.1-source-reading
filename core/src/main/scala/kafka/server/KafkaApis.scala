@@ -326,7 +326,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     * 处理Producer的请求
    */
   def handleProducerRequest(request: RequestChannel.Request) {
-    val produceRequest:ProduceRequest = request.body.asInstanceOf[ProduceRequest]
+    val produceRequest:ProduceRequest = request.body.asInstanceOf[ProduceRequest]// 进来第一步，解析body
     val numBytesAppended:Int = request.header.sizeOf + produceRequest.sizeOf
 
     val (authorizedRequestInfo, unauthorizedRequestInfo) = produceRequest.partitionRecords.asScala.partition {
@@ -334,6 +334,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     // the callback for sending a produce response
+    // 定义好返回给producer的response
     def sendResponseCallback(responseStatus: Map[TopicPartition, PartitionResponse]) {
 
       val mergedResponseStatus = responseStatus ++ unauthorizedRequestInfo.mapValues(_ =>
@@ -341,6 +342,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       var errorInResponse = false
 
+      // 循环一下status，确保每一个tp的数据都是没问题的 todo： 这个status是在什么时候被赋值的？
       mergedResponseStatus.foreach { case (topicPartition, status) =>
         if (status.errorCode != Errors.NONE.code) {
           errorInResponse = true
@@ -357,6 +359,9 @@ class KafkaApis(val requestChannel: RequestChannel,
           // no operation needed if producer request.required.acks = 0; however, if there is any error in handling
           // the request, since no response is expected by the producer, the server will close socket server so that
           // the producer client will know that some error has happened and will refresh its metadata
+
+          // 如果 producer 的 request.required.acks = 0 的话不需要返回任何东西；然而，如果这里在处理请求的时候出现了异常
+          // 因为producer不期望任何应答，所以broker会关闭socket连接，这样，producer就知道这里出现了异常，并更新它的metadata
           if (errorInResponse) {
             val exceptionsSummary = mergedResponseStatus.map { case (topicPartition, status) =>
               topicPartition -> Errors.forCode(status.errorCode).exceptionName
@@ -371,6 +376,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             requestChannel.noOperation(request.processor, request)
           }
         } else {
+          // CAUTION：ack不是0的情况
           val respHeader = new ResponseHeader(request.header.correlationId)
           val respBody = request.header.apiVersion match {
             case 0 => new ProduceResponse(mergedResponseStatus.asJava)
@@ -380,6 +386,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             case version => throw new IllegalArgumentException(s"Version `$version` of ProduceRequest is not handled. Code must be updated.")
           }
 
+          // 把response丢进responseQueues里
           requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, respHeader, respBody)))
         }
       }
@@ -387,7 +394,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // When this callback is triggered, the remote API call has completed
       request.apiRemoteCompleteTimeMs = SystemTime.milliseconds
 
-      quotaManagers(ApiKeys.PRODUCE.id).recordAndMaybeThrottle(
+      quotaManagers(ApiKeys.PRODUCE.id).recordAndMaybeThrottle(// todo ？？？
         request.header.clientId,
         numBytesAppended,
         produceResponseCallback)
