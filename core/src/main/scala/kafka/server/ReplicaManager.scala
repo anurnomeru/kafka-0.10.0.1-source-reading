@@ -323,12 +323,13 @@ class ReplicaManager(val config: KafkaConfig,
     */
   def appendMessages(timeout: Long,
                      requiredAcks: Short, // 这是ProducerRequest中追加到此分区的最后一个消息的offset，它会参与判断DelayedProduce是否符合执行条件
-                     internalTopicsAllowed: Boolean,
+                     internalTopicsAllowed: Boolean, // request.header.clientId == AdminUtils.AdminClientId
                      messagesPerPartition: Map[TopicPartition, MessageSet] /* auth信息 */ ,
-                     responseCallback: Map[TopicPartition, PartitionResponse] => Unit) {
+                     responseCallback: Map[TopicPartition, PartitionResponse] => Unit // 这个callback 主要定义了，需不需要给producer返回东西，以及返回什么东西
+                    ) {
 
     if (isValidRequiredAcks(requiredAcks)) {
-      // 检测acks参数是否有效
+      // 需要ack
       val sTime: Long = SystemTime.milliseconds
 
       // 将消息追加到本地副本Log中，同时还会检测delayedFetchPurgatory中相关key对应的DelayFetch，满足条件则讲其执行完成
@@ -340,12 +341,19 @@ class ReplicaManager(val config: KafkaConfig,
       val produceStatus: Map[TopicPartition, ProducePartitionStatus] =
         localProduceResults.map { case (topicPartition, result) =>
           topicPartition ->
-            ProducePartitionStatus(
+           new ProducePartitionStatus(
               result.info.lastOffset + 1, // required offset
               new PartitionResponse(result.errorCode, result.info.firstOffset, result.info.timestamp)) // response status
         }
 
+
       // 下面检测是否生成delayedProduce，其中一个条件就是检测ProduceRequest中的acks字段是或否为-1
+      // If all the following conditions are true, we need to put a delayed produce request and wait for replication to complete
+      //
+      // 1. required acks = -1
+      // 2. there is data to append
+      // 3. at least one partition append was successful (fewer errors than partitions)
+      // 如果下面所有的条件都是真，我们需要put一个延迟produce request，并且等待同步的完成
       if (delayedRequestRequired(requiredAcks, messagesPerPartition, localProduceResults)) {
         // create delayed produce operation
         // 创建DelayedProduce对象
@@ -355,8 +363,22 @@ class ReplicaManager(val config: KafkaConfig,
         // 这个delayProduce继承了DelayedOperation延迟任务，最后交给DelayedOperationPurgatory延迟消息队列管理
         val delayedProduce: DelayedProduce = new DelayedProduce(timeout, produceMetadata, this, responseCallback)
 
+        //  * 关心的对象是TopicPartitionOperationKey，表示某个Topic中的某个分区。
+        //  * 假设现在有一个ProducerRequest请求，它要向名为test的Topic中追加消息，分区的编号为0，此分区当前的ISR集合中有三个副本，
+        //  * 该ProducerRequest的acks字段为-1，表示需要ISR集合中所有副本都同步了该请求中的消息才能返回DelayedProduce对象，
+        //  * 并交给DelayedOperationPurgatory管理，DOP会将其存放到“test-0”（TopicPartitionOperationKey对象）对应的watchers中。
+        //  * 同时也提交给时间轮。
+        //  *
+        //  * 之后每当Leader副本收到Follower副本发送的对“test-0”的FetchRequest时，都会检测“test-0”对应的Watchers中的DelayedProduce
+        //  * 是否已经满足了执行条件，如果满足执行条件就会执行DelayedProduce，向客户端返回ProduceResponse。
+        //  *
+        //  * 如果满足执行条件就会执行DelayedProduce，向客户端返回ProduceResponse，
+        //  * 最终，该DelayedProduce 会因满足执行条件或时间到期而被执行。
+
         // create a list of (topic, partition) pairs to use as keys for this delayed produce operation
-        val producerRequestKeys = messagesPerPartition.keys.map(new TopicPartitionOperationKey(_)).toSeq
+        val producerRequestKeys: Seq[TopicPartitionOperationKey] = messagesPerPartition
+          .keys// TopicPartition 的迭代器
+          .map(new TopicPartitionOperationKey(_)).toSeq
 
         // try to complete the request immediately, otherwise put it into the purgatory
         // this is because while the delayed produce operation is being created, new
@@ -369,6 +391,9 @@ class ReplicaManager(val config: KafkaConfig,
         val produceResponseStatus = produceStatus.mapValues(status => status.responseStatus)
         responseCallback(produceResponseStatus)
       }
+
+
+
     } else {
       // 如果所需的acks参数草畜了可接受范围，可能是client有什么搞错了
       // 这里仅返回错误信息，而且不会对请求进行处理

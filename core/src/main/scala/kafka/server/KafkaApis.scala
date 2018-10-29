@@ -400,12 +400,13 @@ class KafkaApis(val requestChannel: RequestChannel,
         produceResponseCallback)
     }
 
-    if (authorizedRequestInfo.isEmpty)
+    if (authorizedRequestInfo.isEmpty)// 没有authorized信息，直接返回response
       sendResponseCallback(Map.empty)
     else {
       val internalTopicsAllowed = request.header.clientId == AdminUtils.AdminClientId
 
       // Convert ByteBuffer to ByteBufferMessageSet
+      // TODO ???
       val authorizedMessagesPerPartition = authorizedRequestInfo.map {
         case (topicPartition, buffer) => (topicPartition, new ByteBufferMessageSet(buffer))
       }
@@ -417,11 +418,15 @@ class KafkaApis(val requestChannel: RequestChannel,
         produceRequest.acks,
         internalTopicsAllowed,
         authorizedMessagesPerPartition,
-        sendResponseCallback)
+        sendResponseCallback// 这个callback 主要定义了，需不需要给producer返回东西，以及返回什么东西
+      )
 
       // if the request is put into the purgatory, it will have a held reference
       // and hence cannot be garbage collected; hence we clear its data here in
       // order to let GC re-claim its memory since it is already appended to log
+
+      // 如果请求已经扔进了延迟任务队列，它将会持有一个引用并且不能参与垃圾回收
+      // 所以我们在这里清理一下它的数据，为了让GC回收它的内存
       produceRequest.clearPartitionRecords()
     }
   }
