@@ -298,6 +298,9 @@ class Partition(val topic: String,
    * and we are waiting for all replicas in ISR to be fully caught up to
    * the (local) leader's offset corresponding to this produce request
    * before we acknowledge the produce request.
+   *
+   * 等待所有处于ISR的副本能赶上leader的进度，怎么样才算赶得上：我们正在等待ISR中的所有副本完全赶上(本地)leader对应于此生成请求的偏移量。
+   *
    */
   def checkEnoughReplicasReachOffset(requiredOffset: Long): (Boolean, Short) = {
     leaderReplicaIfLocal() match {

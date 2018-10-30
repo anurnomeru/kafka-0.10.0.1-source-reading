@@ -21,6 +21,7 @@ package kafka.server
 import java.util.concurrent.TimeUnit
 
 import com.yammer.metrics.core.Meter
+import kafka.cluster.Partition
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.Pool
 import org.apache.kafka.common.TopicPartition
@@ -44,7 +45,7 @@ import scala.collection._
   *
   */
 case class ProducePartitionStatus(requiredOffset: Long, responseStatus: PartitionResponse) {
-  @volatile var acksPending = false
+  @volatile var acksPending = false // 在有错误的情况下，将acksPending设置为false
 
   override def toString = "[acksPending: %b, error: %d, startOffset: %d, requiredOffset: %d]"
     .format(acksPending, responseStatus.errorCode, responseStatus.baseOffset, requiredOffset)
@@ -80,12 +81,16 @@ class DelayedProduce(delayMs: Long,
 
   // first update the acks pending variable according to the error code
   // 首先 根据错误码来更新 ack 追加的值
-  produceMetadata.produceStatus.foreach { case (topicPartition, status) =>
+  produceMetadata
+    .produceStatus // Map[TopicPartition, ProducePartitionStatus]
+    .foreach { case (topicPartition, status) =>
     if (status.responseStatus.errorCode == Errors.NONE.code) {
       // Timeout error state will be cleared when required acks are received
       status.acksPending = true
       status.responseStatus.errorCode = Errors.REQUEST_TIMED_OUT.code
     } else {
+
+      // 在有错误的情况下，将acksPending设置为false
       status.acksPending = false
     }
 
@@ -101,20 +106,23 @@ class DelayedProduce(delayMs: Long,
     *   B.1 - If there was a local error thrown while checking if at least requiredAcks
     * replicas have caught up to this operation: set an error in response
     *   B.2 - Otherwise, set the response with no error.
+    *
+    * 首先检查一下是不是acksPending，如果不是，那就是在创建DelayedProduce（也就是自己）的时候发现错误码不为0
+    * 是的情况： 拿到分区，
     */
   override def tryComplete(): Boolean = {
     // check for each partition if it still has pending acks
-    produceMetadata.produceStatus.foreach { case (topicAndPartition, status)/* TopicPartition, ProducePartitionStatus */ =>
+    produceMetadata.produceStatus.foreach { case (topicAndPartition, status) /* TopicPartition, ProducePartitionStatus */ =>
       trace("Checking produce satisfaction for %s, current status %s"
         .format(topicAndPartition, status))
       // skip those partitions that have already been satisfied
       if (status.acksPending) {
-        val partitionOpt = replicaManager.getPartition(topicAndPartition.topic, topicAndPartition.partition)
-        val (hasEnough, errorCode) = partitionOpt match {
+        val partitionOpt: Option[Partition] = replicaManager.getPartition(topicAndPartition.topic, topicAndPartition.partition)
+        val (hasEnough, errorCode) = partitionOpt match {// 所有的partition做循环
           case Some(partition) =>
             partition.checkEnoughReplicasReachOffset(status.requiredOffset)
           case None =>
-            // Case A
+            // Case A  ====  This broker is no longer the leader: set an error in response
             (false, Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
         }
         if (errorCode != Errors.NONE.code) {

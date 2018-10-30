@@ -193,7 +193,13 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
     // operation is unnecessarily added for watch. However, this is a less severe issue since the
     // expire reaper will clean it up periodically.
 
-    var isCompletedByMe = operation synchronized operation.tryComplete()
+    // tryComplete 的成本通常和这个键的成员成正比（ISR越多，越慢），
+    // 我们通过下面的方式来进行检查：调用 tryComplete()，如果operation没有完成，我们只会把Operation添加到键上。
+    // 然后我们会再次调用tryComplete，这次调用，如果operation还没有完成，我们认为它没有错过任何future的触发，
+    // 因为operation已经在watcherList上准备好了。这意味着在两次tryComplete调用之间，如果operation已经被另外的线程完成，
+    // operation就没有必要添加到watch上。然而，这是一个不太严重的问题，因为到期后reaper会定期清理它。
+
+    var isCompletedByMe = operation synchronized operation.tryComplete() // 首先调用tryComplete
     if (isCompletedByMe)
       return true
 
@@ -268,7 +274,7 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
    */
   private def watchForOperation(key: Any, operation: T) {
     inReadLock(removeWatchersLock) {
-      val watcher = watchersForKey.getAndMaybePut(key)
+      val watcher: Watchers = watchersForKey.getAndMaybePut(key)
       watcher.watch(operation)
     }
   }

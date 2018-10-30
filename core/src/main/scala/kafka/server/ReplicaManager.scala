@@ -361,6 +361,9 @@ class ReplicaManager(val config: KafkaConfig,
 
 
         // 这个delayProduce继承了DelayedOperation延迟任务，最后交给DelayedOperationPurgatory延迟消息队列管理
+        /**
+          * 这个就是延时任务
+          */
         val delayedProduce: DelayedProduce = new DelayedProduce(timeout, produceMetadata, this, responseCallback)
 
         //  * 关心的对象是TopicPartitionOperationKey，表示某个Topic中的某个分区。
@@ -377,7 +380,7 @@ class ReplicaManager(val config: KafkaConfig,
 
         // create a list of (topic, partition) pairs to use as keys for this delayed produce operation
         val producerRequestKeys: Seq[TopicPartitionOperationKey] = messagesPerPartition
-          .keys// TopicPartition 的迭代器
+          .keys// TopicPartition 的迭代器` 
           .map(new TopicPartitionOperationKey(_)).toSeq
 
         // try to complete the request immediately, otherwise put it into the purgatory
