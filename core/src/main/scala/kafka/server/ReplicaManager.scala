@@ -341,7 +341,7 @@ class ReplicaManager(val config: KafkaConfig,
       val produceStatus: Map[TopicPartition, ProducePartitionStatus] =
         localProduceResults.map { case (topicPartition, result) =>
           topicPartition ->
-           new ProducePartitionStatus(
+            new ProducePartitionStatus(
               result.info.lastOffset + 1, // required offset
               new PartitionResponse(result.errorCode, result.info.firstOffset, result.info.timestamp)) // response status
         }
@@ -364,7 +364,13 @@ class ReplicaManager(val config: KafkaConfig,
         /**
           * 这个就是延时任务
           */
-        val delayedProduce: DelayedProduce = new DelayedProduce(timeout, produceMetadata, this, responseCallback)
+        val delayedProduce: DelayedProduce = new DelayedProduce(timeout,
+          // 为一个ProducerRequest中的所有相关分区记录了一些追加消息后的返回结果(比如说最近的offset(从produceStatus来))
+          // todo produceStatus则是从 result.info.lastOffset + 1,
+          // todo 再往前则是从appendToLocalLog而来
+          // ，主要用于判断DelayedProduce是否满足执行条件
+          produceMetadata
+          , this, responseCallback)
 
         //  * 关心的对象是TopicPartitionOperationKey，表示某个Topic中的某个分区。
         //  * 假设现在有一个ProducerRequest请求，它要向名为test的Topic中追加消息，分区的编号为0，此分区当前的ISR集合中有三个副本，
@@ -380,7 +386,7 @@ class ReplicaManager(val config: KafkaConfig,
 
         // create a list of (topic, partition) pairs to use as keys for this delayed produce operation
         val producerRequestKeys: Seq[TopicPartitionOperationKey] = messagesPerPartition
-          .keys// TopicPartition 的迭代器` 
+          .keys // TopicPartition 的迭代器`
           .map(new TopicPartitionOperationKey(_)).toSeq
 
         // try to complete the request immediately, otherwise put it into the purgatory
@@ -394,7 +400,6 @@ class ReplicaManager(val config: KafkaConfig,
         val produceResponseStatus = produceStatus.mapValues(status => status.responseStatus)
         responseCallback(produceResponseStatus)
       }
-
 
 
     } else {

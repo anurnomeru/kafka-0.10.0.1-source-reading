@@ -59,7 +59,7 @@ case class ProducePartitionStatus(requiredOffset: Long, responseStatus: Partitio
   * 里面其实就是一个需不需要ack
   * 一个Map，维护TP和TP状态
   */
-case class ProduceMetadata(produceRequiredAcks: Short,
+case class ProduceMetadata(produceRequiredAcks: Short,// 记录了ProduceRequest中Ack的值
                            produceStatus: Map[TopicPartition, ProducePartitionStatus]) {
 
   override def toString = "[requiredAcks: %d, partitionStatus: %s]"
@@ -73,9 +73,13 @@ case class ProduceMetadata(produceRequiredAcks: Short,
   * 一个延迟的生产操作可以被replica manager所管理，并且被 produce operation purgatory所监控
   */
 class DelayedProduce(delayMs: Long,
-                     produceMetadata: ProduceMetadata, // 为一个ProducerRequest中的所有相关分区记录了一些追加消息后的返回结果，主要用于判断DelayedProduce是否满足执行条件
+                     // 为一个ProducerRequest中的所有相关分区记录了一些追加消息后的返回结果(比如说最近的offset(从produceStatus来))
+                     // todo produceStatus则是从 result.info.lastOffset + 1,
+                     // todo 再往前则是从appendToLocalLog而来
+                     // ，主要用于判断DelayedProduce是否满足执行条件
+                     produceMetadata: ProduceMetadata,
                      // 主要用于判断DelayedProduce是否满足执行条件
-                     replicaManager: ReplicaManager,
+                     replicaManager: ReplicaManager,// 当前DelayedProduce关联的ReplicaManager对象
                      responseCallback: Map[TopicPartition, PartitionResponse] => Unit)
   extends DelayedOperation(delayMs) {
 
@@ -84,9 +88,10 @@ class DelayedProduce(delayMs: Long,
   produceMetadata
     .produceStatus // Map[TopicPartition, ProducePartitionStatus]
     .foreach { case (topicPartition, status) =>
+    // 如果当前写入成功，则等待isr集合中的副本完成同步
     if (status.responseStatus.errorCode == Errors.NONE.code) {
       // Timeout error state will be cleared when required acks are received
-      status.acksPending = true
+      status.acksPending = true // 等待acks
       status.responseStatus.errorCode = Errors.REQUEST_TIMED_OUT.code
     } else {
 
