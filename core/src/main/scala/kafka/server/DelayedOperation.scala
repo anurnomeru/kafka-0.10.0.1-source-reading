@@ -199,15 +199,28 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
     // 因为operation已经在watcherList上准备好了。这意味着在两次tryComplete调用之间，如果operation已经被另外的线程完成，
     // operation就没有必要添加到watch上。然而，这是一个不太严重的问题，因为到期后reaper会定期清理它。
 
+    // todo tryCompleted：
+    //    * The delayed produce operation can be completed if every partition
+    //    * it produces to is satisfied by one of the following:
+    //    *
+    //    * Case A: This broker is no longer the leader: set an error in response
+    // CAUTION 怎么判断是不是leader？ replicaManager 中判断：allPartitions.get((topic, partitionId))，取不到则不是leader
+    //    * Case B: This broker is the leader:
+    //    *   B.1 - If there was a local error thrown while checking if at least requiredAcks
+    //    * replicas have caught up to this operation: set an error in response
+    //    *   B.2 - Otherwise, set the response with no error.
     var isCompletedByMe = operation synchronized operation.tryComplete() // 首先调用tryComplete
+
     if (isCompletedByMe)
       return true
 
     var watchCreated = false
     for (key <- watchKeys) {
       // If the operation is already completed, stop adding it to the rest of the watcher list.
-      if (operation.isCompleted())
+      if (operation.isCompleted())// 判断一下有没有被别的线程完成// Operation是一个延迟任务
         return false
+
+      // 实际上就是往list里面塞东西
       watchForOperation(key, operation)
 
       if (!watchCreated) {

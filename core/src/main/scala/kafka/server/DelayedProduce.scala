@@ -73,7 +73,7 @@ case class ProduceMetadata(produceRequiredAcks: Short,
   * 一个延迟的生产操作可以被replica manager所管理，并且被 produce operation purgatory所监控
   */
 class DelayedProduce(delayMs: Long,
-                     produceMetadata: ProduceMetadata, // 为一个ProducerRequest中的所有相关分区记录了一些追加消息后的返回结果，
+                     produceMetadata: ProduceMetadata, // 为一个ProducerRequest中的所有相关分区记录了一些追加消息后的返回结果，主要用于判断DelayedProduce是否满足执行条件
                      // 主要用于判断DelayedProduce是否满足执行条件
                      replicaManager: ReplicaManager,
                      responseCallback: Map[TopicPartition, PartitionResponse] => Unit)
@@ -107,35 +107,35 @@ class DelayedProduce(delayMs: Long,
     * replicas have caught up to this operation: set an error in response
     *   B.2 - Otherwise, set the response with no error.
     *
-    * 首先检查一下是不是acksPending，如果不是，那就是在创建DelayedProduce（也就是自己）的时候发现错误码不为0
-    * 是的情况： 拿到分区，
     */
   override def tryComplete(): Boolean = {
     // check for each partition if it still has pending acks
-    produceMetadata.produceStatus.foreach { case (topicAndPartition, status) /* TopicPartition, ProducePartitionStatus */ =>
-      trace("Checking produce satisfaction for %s, current status %s"
-        .format(topicAndPartition, status))
-      // skip those partitions that have already been satisfied
-      if (status.acksPending) {
-        val partitionOpt: Option[Partition] = replicaManager.getPartition(topicAndPartition.topic, topicAndPartition.partition)
-        val (hasEnough, errorCode) = partitionOpt match {// 所有的partition做循环
-          case Some(partition) =>
-            partition.checkEnoughReplicasReachOffset(status.requiredOffset)
-          case None =>
-            // Case A  ====  This broker is no longer the leader: set an error in response
-            (false, Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
-        }
-        if (errorCode != Errors.NONE.code) {
-          // Case B.1
-          status.acksPending = false
-          status.responseStatus.errorCode = errorCode
-        } else if (hasEnough) {
-          // Case B.2
-          status.acksPending = false
-          status.responseStatus.errorCode = Errors.NONE.code
+    produceMetadata
+      .produceStatus
+      .foreach { case (topicAndPartition, status) /* TopicPartition, ProducePartitionStatus */ =>
+        trace("Checking produce satisfaction for %s, current status %s"
+          .format(topicAndPartition, status))
+        // skip those partitions that have already been satisfied
+        if (status.acksPending) {
+          val partitionOpt: Option[Partition] = replicaManager.getPartition(topicAndPartition.topic, topicAndPartition.partition)
+          val (hasEnough, errorCode) = partitionOpt match {
+            case Some(partition) =>
+              partition.checkEnoughReplicasReachOffset(status.requiredOffset)
+            case None =>
+              // Case A  ====  This broker is no longer the leader: set an error in response
+              (false, Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
+          }
+          if (errorCode != Errors.NONE.code) {
+            // Case B.1
+            status.acksPending = false
+            status.responseStatus.errorCode = errorCode
+          } else if (hasEnough) {
+            // Case B.2
+            status.acksPending = false
+            status.responseStatus.errorCode = Errors.NONE.code
+          }
         }
       }
-    }
 
     // check if each partition has satisfied at lease one of case A and case B
     if (!produceMetadata.produceStatus.values.exists(p => p.acksPending))
