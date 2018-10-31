@@ -170,6 +170,8 @@ class FileMessageSet private[kafka](@volatile var file: File, // 对应磁盘上
   /**
     * Write some of this set to the given channel.
     *
+    * 将FileMessageSet写部分数据到指定的channel上
+    *
     * @param destChannel   The channel to write to.
     * @param writePosition The position in the message set to begin writing from.
     * @param size          The maximum number of bytes to write
@@ -177,15 +179,20 @@ class FileMessageSet private[kafka](@volatile var file: File, // 对应磁盘上
     */
   def writeTo(destChannel: GatheringByteChannel, writePosition: Long, size: Int): Int = {
     // Ensure that the underlying size has not changed.
+    // 进行边界检查
     val newSize = math.min(channel.size.toInt, end) - start
     if (newSize < _size.get()) {
       throw new KafkaException("Size of FileMessageSet %s has been truncated during write: old size %d, new size %d"
         .format(file.getAbsolutePath, _size.get(), newSize))
     }
-    val position = start + writePosition
-    val count = math.min(size, sizeInBytes)
+
+    val position = start + writePosition // The position in the message set to begin writing from.
+    val count = math.min(size, sizeInBytes())
+    // sizeInBytes 实际上就是 _size.get()
     val bytesTransferred = (destChannel match {
       case tl: TransportLayer => tl.transferFrom(channel, position, count)
+        // TODO PlaintextTransportLayer 则：fileChannel.transferTo(position, count, socketChannel);
+        // TODO SslTransportLayer       则：fileChannel.transferTo(position, count, this);
       case dc => channel.transferTo(position, count, dc)
     }).toInt
     trace("FileMessageSet " + file.getAbsolutePath + " : bytes transferred : " + bytesTransferred
