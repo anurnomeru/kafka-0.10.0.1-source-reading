@@ -337,7 +337,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     // 定义好返回给producer的response
     def sendResponseCallback(responseStatus: Map[TopicPartition, PartitionResponse]) {
 
-      val mergedResponseStatus = responseStatus ++ unauthorizedRequestInfo.mapValues(_ =>
+      // 合并两个map
+      val mergedResponseStatus: Map[TopicPartition, PartitionResponse] = responseStatus ++ unauthorizedRequestInfo.mapValues(_ =>
         new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED.code, -1, Message.NoTimestamp))
 
       var errorInResponse = false
@@ -354,6 +355,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       }
 
+      // 定义回调函数
       def produceResponseCallback(delayTimeMs: Int) {
         if (produceRequest.acks == 0) {
           // no operation needed if producer request.required.acks = 0; however, if there is any error in handling
@@ -378,6 +380,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         } else {
           // CAUTION：ack不是0的情况
           val respHeader = new ResponseHeader(request.header.correlationId)
+
+          // 构造一个produceRequest的返回消息体
           val respBody = request.header.apiVersion match {
             case 0 => new ProduceResponse(mergedResponseStatus.asJava)
             case version@(1 | 2) => new ProduceResponse(mergedResponseStatus.asJava, delayTimeMs, version)
@@ -387,14 +391,16 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
 
           // 把response丢进responseQueues里
-          requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, respHeader, respBody)))
+          requestChannel.sendResponse(new RequestChannel.Response(request,
+            new ResponseSend(request.connectionId, respHeader, respBody)))
         }
       }
 
       // When this callback is triggered, the remote API call has completed
       request.apiRemoteCompleteTimeMs = SystemTime.milliseconds
 
-      quotaManagers(ApiKeys.PRODUCE.id).recordAndMaybeThrottle(// todo ？？？
+      quotaManagers(ApiKeys.PRODUCE.id)// todo ？？？quotaManagers 是 记录监控数据用
+        .recordAndMaybeThrottle(// 这里面会调用callback
         request.header.clientId,
         numBytesAppended,
         produceResponseCallback)

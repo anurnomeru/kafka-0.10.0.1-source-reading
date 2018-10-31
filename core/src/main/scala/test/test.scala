@@ -1,17 +1,19 @@
 package test
 
+import scala.collection.mutable
+
 /**
   * Created by Anur IjuoKaruKas on 2018/9/20
   */
 object test {
 
   def main(args: Array[String]): Unit = {
+    val emptyMap: mutable.HashMap[String, Int] = new mutable.HashMap[String, Int]()
+    emptyMap.+=(("1",1))
+    val emptyMap2: mutable.HashMap[String, Int] = new mutable.HashMap[String, Int]()
+    emptyMap2.+=(("2",1))
 
-    val fun: Int => Long = f => f + 5
-    println(fun.compose[String](String => String.toInt).andThen(l => l * 5).apply("10"))
-
-    //    testConsole.operationAnother()
-    //    testConsole.printAnother()
+    emptyMap2
   }
 
 }

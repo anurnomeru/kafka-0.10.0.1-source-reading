@@ -100,6 +100,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
 
   /**
    * Records that a clientId changed some metric being throttled (produced/consumed bytes, QPS etc.)
+    *
    * @param clientId clientId that produced the data
    * @param value amount of data written in bytes
    * @param callback Callback function. This will be triggered immediately if quota is not violated.

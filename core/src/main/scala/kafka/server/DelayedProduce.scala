@@ -59,7 +59,7 @@ case class ProducePartitionStatus(requiredOffset: Long, responseStatus: Partitio
   * 里面其实就是一个需不需要ack
   * 一个Map，维护TP和TP状态
   */
-case class ProduceMetadata(produceRequiredAcks: Short,// 记录了ProduceRequest中Ack的值
+case class ProduceMetadata(produceRequiredAcks: Short, // 记录了ProduceRequest中Ack的值
                            produceStatus: Map[TopicPartition, ProducePartitionStatus]) {
 
   override def toString = "[requiredAcks: %d, partitionStatus: %s]"
@@ -79,7 +79,7 @@ class DelayedProduce(delayMs: Long,
                      // ，主要用于判断DelayedProduce是否满足执行条件
                      produceMetadata: ProduceMetadata,
                      // 主要用于判断DelayedProduce是否满足执行条件
-                     replicaManager: ReplicaManager,// 当前DelayedProduce关联的ReplicaManager对象
+                     replicaManager: ReplicaManager, // 当前DelayedProduce关联的ReplicaManager对象
                      responseCallback: Map[TopicPartition, PartitionResponse] => Unit)
   extends DelayedOperation(delayMs) {
 
@@ -125,6 +125,7 @@ class DelayedProduce(delayMs: Long,
           val partitionOpt: Option[Partition] = replicaManager.getPartition(topicAndPartition.topic, topicAndPartition.partition)
           val (hasEnough, errorCode) = partitionOpt match {
             case Some(partition) =>
+              // 检查这个分区的HW是否大于requiredOffset
               partition.checkEnoughReplicasReachOffset(status.requiredOffset)
             case None =>
               // Case A  ====  This broker is no longer the leader: set an error in response
@@ -161,7 +162,13 @@ class DelayedProduce(delayMs: Long,
     * Upon completion, return the current response status along with the error code per partition
     */
   override def onComplete() {
-    val responseStatus = produceMetadata.produceStatus.mapValues(status => status.responseStatus)
+
+    // 如果DelayedProduce是到期执行，而不是中途报错，那么错误码会是一开始预先设置的timeout
+    val responseStatus: Map[TopicPartition, PartitionResponse] = produceMetadata
+      .produceStatus
+      // produceStatus: Map[TopicPartition, ProducePartitionStatus]
+      .mapValues(status => status.responseStatus)
+
     responseCallback(responseStatus)
   }
 }
