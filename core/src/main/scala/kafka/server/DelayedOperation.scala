@@ -221,6 +221,7 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
         return false
 
       // 实际上就是往list里面塞东西
+      // 对于produce来说这个operation就是DelayedProduce
       watchForOperation(key, operation)
 
       if (!watchCreated) {
