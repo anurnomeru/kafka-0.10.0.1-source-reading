@@ -42,15 +42,26 @@ import org.apache.kafka.common.requests.PartitionState
 class Partition(val topic: String,
                 val partitionId: Int,
                 time: Time,
-                replicaManager: ReplicaManager) extends Logging with KafkaMetricsGroup {
+                replicaManager: ReplicaManager) extends Logging with KafkaMetricsGroup {\
+
+  // 当前broker的id
   private val localBrokerId = replicaManager.config.brokerId
+
+  // 当前Broker的LogManager对象
   private val logManager = replicaManager.logManager
+
+  // 操作zk的辅助类
   private val zkUtils = replicaManager.zkUtils
   private val assignedReplicaMap = new Pool[Int, Replica]
+
   // The read lock is only required when multiple reads are executed and needs to be in a consistent manner
   private val leaderIsrUpdateLock = new ReentrantReadWriteLock()
   private var zkVersion: Int = LeaderAndIsr.initialZKVersion
+
+  // leader的年代信息
   @volatile private var leaderEpoch: Int = LeaderAndIsr.initialLeaderEpoch - 1
+
+  // 该分区的leader副本的id
   @volatile var leaderReplicaIdOpt: Option[Int] = None
   @volatile var inSyncReplicas: Set[Replica] = Set.empty[Replica]
 
