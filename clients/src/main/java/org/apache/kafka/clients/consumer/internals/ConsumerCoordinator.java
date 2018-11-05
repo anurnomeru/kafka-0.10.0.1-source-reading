@@ -284,7 +284,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             groupId, assignor.name(), subscriptions);
 
         // todo 核心Rebalance后，topic下分区的分配方法
-        Map<String/* memberId */, Assignment> assignment = assignor.assign(metadata.fetch(), subscriptions);
+        Map<String/* memberId */, Assignment> assignment = assignor.assign(metadata.fetch(), subscriptions/* allSubscriptions */);
 
         log.debug("Finished assignment for group {}: {}", groupId, assignment);
 

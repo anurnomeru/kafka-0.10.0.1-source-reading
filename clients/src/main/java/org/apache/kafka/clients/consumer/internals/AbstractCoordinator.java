@@ -531,7 +531,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
             // joinResponse.members : Map<String/* memberId */, ByteBuffer/* 包含它关注了那些 topic */>
             Map<String, ByteBuffer> groupAssignment = performAssignment(joinResponse.leaderId(), joinResponse.groupProtocol(),
-                joinResponse.members());
+                joinResponse.members()/* Map<String memberId , ByteBuffer 包含它关注了那些 topic > allSubscriptions */);
 
             // 将分配好的组进行同步
             SyncGroupRequest request = new SyncGroupRequest(groupId, generation, memberId, groupAssignment);

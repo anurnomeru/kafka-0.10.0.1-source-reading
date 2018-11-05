@@ -119,7 +119,7 @@ class GroupCoordinator(val brokerId: Int,
       // only try to create the group if the group is not unknown AND
       // the member id is UNKNOWN, if member is specified but group does not
       // exist we should reject the request
-      var group = groupManager.getGroup(groupId)
+      var group:GroupMetadata = groupManager.getGroup(groupId)
       if (group == null) {
         if (memberId != JoinGroupRequest.UNKNOWN_MEMBER_ID) {
           responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID.code))
@@ -170,7 +170,7 @@ class GroupCoordinator(val brokerId: Int,
             if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
               addMemberAndRebalance(sessionTimeoutMs, clientId, clientHost, protocols, group, responseCallback)
             } else {
-              val member = group.get(memberId)
+              val member:MemberMetadata = group.get(memberId)
               if (member.matches(protocols)) {
                 // member is joining with the same metadata (which could be because it failed to
                 // receive the initial JoinGroup response), so just return current group information
