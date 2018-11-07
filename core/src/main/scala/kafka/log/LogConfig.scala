@@ -1,25 +1,23 @@
 /**
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+  * Licensed to the Apache Software Foundation (ASF) under one or more
+  * contributor license agreements.  See the NOTICE file distributed with
+  * this work for additional information regarding copyright ownership.
+  * The ASF licenses this file to You under the Apache License, Version 2.0
+  * (the "License"); you may not use this file except in compliance with
+  * the License.  You may obtain a copy of the License at
+  *
+  * http://www.apache.org/licenses/LICENSE-2.0
+  *
+  * Unless required by applicable law or agreed to in writing, software
+  * distributed under the License is distributed on an "AS IS" BASIS,
+  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
+  */
 
 package kafka.log
 
-import java.util.Properties
-
-import scala.collection.JavaConverters._
+import java.util.{Locale, Properties}
 
 import kafka.api.ApiVersion
 import kafka.message.{BrokerCompressionCodec, Message}
@@ -27,7 +25,8 @@ import kafka.server.KafkaConfig
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.utils.Utils
-import java.util.Locale
+
+import scala.collection.JavaConverters._
 
 object Defaults {
   val SegmentSize = kafka.server.Defaults.LogSegmentBytes
@@ -55,9 +54,9 @@ object Defaults {
 
 case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfig.configDef, props, false) {
   /**
-   * Important note: Any configuration parameter that is passed along from KafkaConfig to LogConfig
-   * should also go in copyKafkaConfigToLog.
-   */
+    * Important note: Any configuration parameter that is passed along from KafkaConfig to LogConfig
+    * should also go in copyKafkaConfigToLog.
+    */
   val segmentSize = getInt(LogConfig.SegmentBytesProp)
   val segmentMs = getLong(LogConfig.SegmentMsProp)
   val segmentJitterMs = getLong(LogConfig.SegmentJitterMsProp)
@@ -137,7 +136,7 @@ object LogConfig {
   val CompressionTypeDoc = "Specify the final compression type for a given topic. This configuration accepts the " +
     "standard compression codecs ('gzip', 'snappy', lz4). It additionally accepts 'uncompressed' which is equivalent to " +
     "no compression; and 'producer' which means retain the original compression codec set by the producer."
-  val PreAllocateEnableDoc ="Should pre allocate file when create new segment?"
+  val PreAllocateEnableDoc = "Should pre allocate file when create new segment?"
   val MessageFormatVersionDoc = KafkaConfig.LogMessageFormatVersionDoc
   val MessageTimestampTypeDoc = KafkaConfig.LogMessageTimestampTypeDoc
   val MessageTimestampDifferenceMaxMsDoc = KafkaConfig.LogMessageTimestampDifferenceMaxMsDoc
@@ -160,7 +159,7 @@ object LogConfig {
       // can be negative. See kafka.log.LogManager.cleanupExpiredSegments
       .define(RetentionMsProp, LONG, Defaults.RetentionMs, MEDIUM, RetentionMsDoc)
       .define(MaxMessageBytesProp, INT, Defaults.MaxMessageSize, atLeast(0), MEDIUM, MaxMessageSizeDoc)
-      .define(IndexIntervalBytesProp, INT, Defaults.IndexInterval, atLeast(0), MEDIUM,  IndexIntervalDoc)
+      .define(IndexIntervalBytesProp, INT, Defaults.IndexInterval, atLeast(0), MEDIUM, IndexIntervalDoc)
       .define(DeleteRetentionMsProp, LONG, Defaults.DeleteRetentionMs, atLeast(0), MEDIUM, DeleteRetentionMsDoc)
       .define(FileDeleteDelayMsProp, LONG, Defaults.FileDeleteDelayMs, atLeast(0), MEDIUM, FileDeleteDelayMsDoc)
       .define(MinCleanableDirtyRatioProp, DOUBLE, Defaults.MinCleanableDirtyRatio, between(0, 1), MEDIUM,
@@ -170,7 +169,7 @@ object LogConfig {
       .define(UncleanLeaderElectionEnableProp, BOOLEAN, Defaults.UncleanLeaderElectionEnable,
         MEDIUM, UncleanLeaderElectionEnableDoc)
       .define(MinInSyncReplicasProp, INT, Defaults.MinInSyncReplicas, atLeast(1), MEDIUM, MinInSyncReplicasDoc)
-      .define(CompressionTypeProp, STRING, Defaults.CompressionType, in(BrokerCompressionCodec.brokerCompressionOptions:_*), MEDIUM, CompressionTypeDoc)
+      .define(CompressionTypeProp, STRING, Defaults.CompressionType, in(BrokerCompressionCodec.brokerCompressionOptions: _*), MEDIUM, CompressionTypeDoc)
       .define(PreAllocateEnableProp, BOOLEAN, Defaults.PreAllocateEnable,
         MEDIUM, PreAllocateEnableDoc)
       .define(MessageFormatVersionProp, STRING, Defaults.MessageFormatVersion, MEDIUM, MessageFormatVersionDoc)
@@ -181,10 +180,11 @@ object LogConfig {
   def apply(): LogConfig = LogConfig(new Properties())
 
   def configNames: Seq[String] = configDef.names.asScala.toSeq.sorted
-  
+
   /**
-   * Create a log config instance using the given properties and defaults
-   */
+    * Create a log config instance using the given properties and defaults
+    * 使用给定的配置以及默认配置来创建日志配置实例
+    */
   def fromProps(defaults: java.util.Map[_ <: Object, _ <: Object], overrides: Properties): LogConfig = {
     val props = new Properties()
     props.putAll(defaults)
@@ -193,16 +193,16 @@ object LogConfig {
   }
 
   /**
-   * Check that property names are valid
-   */
+    * Check that property names are valid
+    */
   def validateNames(props: Properties) {
     val names = configNames
     for (name <- props.keys.asScala) require(names.contains(name), s"Unknown configuration `$name`.")
   }
 
   /**
-   * Check that the given properties contain only valid log config names and that all values can be parsed and are valid
-   */
+    * Check that the given properties contain only valid log config names and that all values can be parsed and are valid
+    */
   def validate(props: Properties) {
     validateNames(props)
     configDef.parse(props)

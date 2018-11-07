@@ -24,7 +24,7 @@ import kafka.admin.AdminUtils
 import kafka.api.LeaderAndIsr
 import kafka.common._
 import kafka.controller.KafkaController
-import kafka.log.LogConfig
+import kafka.log.{Log, LogConfig}
 import kafka.message.ByteBufferMessageSet
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server._
@@ -35,6 +35,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.PartitionState
 
 import scala.collection.JavaConverters._
+import scala.collection.Map
 
 /**
   * Data structure that represents a topic partition. The leader maintains the AR, ISR, CUR, RAR
@@ -43,7 +44,6 @@ class Partition(val topic: String,
                 val partitionId: Int,
                 time: Time,
                 replicaManager: ReplicaManager) extends Logging with KafkaMetricsGroup {
-  \
 
   // 当前broker的id
   private val localBrokerId = replicaManager.config.brokerId
@@ -105,15 +105,30 @@ class Partition(val topic: String,
       case Some(replica) => replica
       case None =>
         if (isReplicaLocal(replicaId)) {
-          val config = LogConfig.fromProps(logManager.defaultConfig.originals,
+          // 默认使用 logManager配置，但zk如果配置了某项，则优先使用zk的配置。
+          val config: LogConfig = LogConfig.fromProps(logManager.defaultConfig.originals,
             AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic))
-          val log = logManager.createLog(TopicAndPartition(topic, partitionId), config)
+
+          // 创建log或者沿用现有log（TODO 书中logManager小节）
+          val log: Log = logManager.createLog(TopicAndPartition(topic, partitionId), config)
+
+          // 获取指定log目录对应的OffsetCheckpoint对象，它负责管理该log目录下的
+          // replication-offset-checkpoint文件（TODO 书中logManager小节）
           val checkpoint = replicaManager.highWatermarkCheckpoints(log.dir.getParentFile.getAbsolutePath)
-          val offsetMap = checkpoint.read
+
+          // 将checkpoint中HW信息转成map
+          val offsetMap: Map[TopicAndPartition, Long] = checkpoint.read()
+
           if (!offsetMap.contains(TopicAndPartition(topic, partitionId)))
             info("No checkpointed highwatermark is found for partition [%s,%d]".format(topic, partitionId))
+
+          // 找到tp下对应的HW，再与LEO比较，取小的那个
           val offset = offsetMap.getOrElse(TopicAndPartition(topic, partitionId), 0L).min(log.logEndOffset)
+
+          // 创建replica对象
           val localReplica = new Replica(replicaId, this, time, offset, Some(log))
+
+          // 添加起来
           addReplicaIfNotExists(localReplica)
         } else {
           val remoteReplica = new Replica(replicaId, this, time)
@@ -125,10 +140,7 @@ class Partition(val topic: String,
 
   def getReplica(replicaId: Int = localBrokerId): Option[Replica] = {
     val replica = assignedReplicaMap.get(replicaId)
-    if (replica == null)
-      None
-    else
-      Some(replica)
+    Option(replica)
   }
 
   def leaderReplicaIfLocal(): Option[Replica] = {
