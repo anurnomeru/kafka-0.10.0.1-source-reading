@@ -91,12 +91,6 @@ final class InFlightRequests {
     public boolean canSendMore(String node) {
         Deque<ClientRequest> queue = requests.get(node);
 
-        if (queue != null) {
-            System.out.println(queue.peekFirst()
-                                    .request()
-                                    .completed());
-        }
-
         return queue == null || queue.isEmpty() ||
             (queue.peekFirst()
                   .request()

@@ -468,7 +468,6 @@ private[kafka] class Processor(val id: Int, // 定置化，id一共有 endPoint 
         processNewResponses() // CAUTION 需要response的调用kafkaChannel的send，并且关注READ，也关注WRITE
 
         poll() // poll一波，poll完就取关了WRITE，一次poll只会从
-
         // 类似于networkClient里面那个，它其实就是将收到的东西扔进 RequestChannel 的 queue 里
         // RequestChannel 是 Processor 和 Handler线程之间传递数据的队列
         // 然后取消关注READ
