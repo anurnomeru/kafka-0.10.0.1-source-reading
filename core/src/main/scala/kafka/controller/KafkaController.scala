@@ -46,6 +46,9 @@ import java.util.concurrent.locks.ReentrantLock
 import kafka.server._
 import kafka.common.TopicAndPartition
 
+/**
+  * 维护了Controller的上下文信息，可以看做是zookeeper的缓存
+  */
 class ControllerContext(val zkUtils: ZkUtils,
                         val zkSessionTimeout: Int) {
   var controllerChannelManager: ControllerChannelManager = null
