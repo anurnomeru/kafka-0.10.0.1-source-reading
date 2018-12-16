@@ -35,14 +35,13 @@ import org.apache.kafka.common.{Node, TopicPartition}
 
 import scala.collection.JavaConverters._
 import scala.collection.{Set, mutable}
-import scala.collection.mutable.HashMap
 
 /**
   * controller leader 通过发送多重请求管理集群中的其他broker，kafkaController使用ControllerChannelManager管理其
   * 与集群中各个broker的网络交互
   */
 class ControllerChannelManager(controllerContext: ControllerContext, config: KafkaConfig, time: Time, metrics: Metrics, threadNamePrefix: Option[String] = None) extends Logging {
-    protected val brokerStateInfo = new HashMap[Int, ControllerBrokerStateInfo]
+    protected val brokerStateInfo = new mutable.HashMap[Int, ControllerBrokerStateInfo]
     private val brokerLock = new Object
     this.logIdent = "[Channel manager on controller " + config.brokerId + "]: "
 
@@ -173,6 +172,7 @@ class RequestSendThread(val controllerId: Int,
 
         def backoff(): Unit = CoreUtils.swallowTrace(Thread.sleep(300))
 
+        // 从缓冲队列中拿一个QueueItem
         val QueueItem(apiKey, apiVersion, request, callback) = queue.take()
         import NetworkClientBlockingOps._
         var clientResponse: ClientResponse = null
@@ -182,15 +182,17 @@ class RequestSendThread(val controllerId: Int,
                 while (isRunning.get() && !isSendSuccessful) {
                     // if a broker goes down for a long time, then at some point the controller's zookeeper listener will trigger a
                     // removeBroker which will invoke shutdown() on this thread. At that point, we will stop retrying.
+                    // 如果一个broker长时间宕机，controller的zk监听器将会在某个时刻触发 removeBroker来停止这个线程。在这个时刻，我们将停止重试。
                     try {
-                        if (!brokerReady()) {
+                        if (!brokerReady()) {// 阻塞等待符合发送条件
                             isSendSuccessful = false
-                            backoff()
+                            backoff()// 退避
                         }
                         else {
                             val requestHeader = apiVersion.fold(networkClient.nextRequestHeader(apiKey))(networkClient.nextRequestHeader(apiKey, _))
                             val send = new RequestSend(brokerNode.idString, requestHeader, request.toStruct)
                             val clientRequest = new ClientRequest(time.milliseconds(), true, send, null)
+                            // 发送请求并等待响应
                             clientResponse = networkClient.blockingSendAndReceive(clientRequest)(time)
                             isSendSuccessful = true
                         }
@@ -214,6 +216,7 @@ class RequestSendThread(val controllerId: Int,
                     stateChangeLogger.trace("Controller %d epoch %d received response %s for a request sent to broker %s"
                       .format(controllerId, controllerContext.epoch, response.toString, brokerNode.toString))
 
+                    // 调用之前封装的回调函数
                     if (callback != null) {
                         callback(response)
                     }
@@ -450,10 +453,12 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends Logging 
 /**
   * 表示本broker和其他broker连接的各种信息
   */
-case class ControllerBrokerStateInfo(networkClient: NetworkClient,
-                                     brokerNode: Node,
-                                     messageQueue: BlockingQueue[QueueItem],
+case class ControllerBrokerStateInfo(networkClient: NetworkClient, // 负责维护Controller与Broker通信的网络通信，与NetworkClientBlockingOps 配合实现阻塞
+                                     brokerNode: Node, // 记录了broker的host，ip，port以及机架信息。
+                                     messageQueue: BlockingQueue[QueueItem], // 缓冲队列，QueueItem：封装了请求本身与对应的回调函数
                                      requestSendThread: RequestSendThread)
+
+// RequestSendThread用于发送请求的线程，继承了 ShutdownAbleThread，在线程停止前会循环执行doWork，通过NetworkClientBlockingOps 完成发送请求并阻塞等待响应
 
 case class StopReplicaRequestInfo(replica: PartitionAndReplica, deletePartition: Boolean, callback: AbstractRequestResponse => Unit = null)
 
