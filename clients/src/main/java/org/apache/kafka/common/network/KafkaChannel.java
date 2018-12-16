@@ -103,7 +103,6 @@ public class KafkaChannel {
 
     public static void main(String[] args) {
         System.out.println(reorganizeString("aaaabbb"));
-        ;
     }
 
     static byte[] sBytes;
@@ -141,7 +140,7 @@ public class KafkaChannel {
                 exchange++;
             }
 
-            if (to != length-1) {// 防止数组越界
+            if (to != length - 1) {// 防止数组越界
                 if (sBytes[to + 1] != sBytes[from + 1]) {
                     exchange++;
                 }
