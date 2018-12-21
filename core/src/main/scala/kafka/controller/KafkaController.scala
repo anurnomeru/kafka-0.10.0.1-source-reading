@@ -52,7 +52,7 @@ import kafka.common.TopicAndPartition
   */
 class ControllerContext(val zkUtils: ZkUtils,
                         val zkSessionTimeout: Int) {
-    var controllerChannelManager: ControllerChannelManager = null
+    var controllerChannelManager: ControllerChannelManager = null; // broker之间的交互
     val controllerLock: ReentrantLock = new ReentrantLock()
     var shuttingDownBrokerIds: mutable.Set[Int] = mutable.Set.empty
     val brokerShutdownLock: Object = new Object

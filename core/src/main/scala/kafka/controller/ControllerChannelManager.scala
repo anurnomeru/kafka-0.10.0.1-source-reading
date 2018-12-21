@@ -465,9 +465,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends Logging 
 case class ControllerBrokerStateInfo(networkClient: NetworkClient, // 负责维护Controller与Broker通信的网络通信，与NetworkClientBlockingOps 配合实现阻塞
                                      brokerNode: Node, // 记录了broker的host，ip，port以及机架信息。
                                      messageQueue: BlockingQueue[QueueItem], // 缓冲队列，QueueItem：封装了请求本身与对应的回调函数
-                                     requestSendThread: RequestSendThread)
-
-// RequestSendThread用于发送请求的线程，继承了 ShutdownAbleThread，在线程停止前会循环执行doWork，通过NetworkClientBlockingOps 完成发送请求并阻塞等待响应
+                                     requestSendThread: RequestSendThread)// RequestSendThread用于发送请求的线程，继承了 ShutdownAbleThread，在线程停止前会循环执行doWork，通过NetworkClientBlockingOps 完成发送请求并阻塞等待响应
 
 case class StopReplicaRequestInfo(replica: PartitionAndReplica, deletePartition: Boolean, callback: AbstractRequestResponse => Unit = null)
 
