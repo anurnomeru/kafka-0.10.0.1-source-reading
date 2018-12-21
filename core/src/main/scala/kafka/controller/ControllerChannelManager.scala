@@ -37,8 +37,8 @@ import scala.collection.JavaConverters._
 import scala.collection.{Set, mutable}
 
 /**
-  * controller leader 通过发送多重请求管理集群中的其他broker，kafkaController使用ControllerChannelManager管理其
-  * 与集群中各个broker的网络交互
+  * controller leader 通过发送多重请求管理集群中的其他broker，kafkaController使用ControllerChannelManager
+  * 管理其与集群中各个broker的网络交互
   */
 class ControllerChannelManager(controllerContext: ControllerContext, config: KafkaConfig, time: Time, metrics: Metrics, threadNamePrefix: Option[String] = None) extends Logging {
 
@@ -95,7 +95,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
     private def addNewBroker(broker: Broker) {
         val messageQueue: LinkedBlockingQueue[QueueItem] = new LinkedBlockingQueue[QueueItem]
         debug("Controller %d trying to connect to broker %d".format(config.brokerId, broker.id))
-        val brokerEndPoint:BrokerEndPoint = broker.getBrokerEndPoint(config.interBrokerSecurityProtocol)
+        val brokerEndPoint: BrokerEndPoint = broker.getBrokerEndPoint(config.interBrokerSecurityProtocol)
         val brokerNode = new Node(broker.id, brokerEndPoint.host, brokerEndPoint.port)
         val networkClient = {
             val channelBuilder = ChannelBuilders.create(
@@ -141,9 +141,9 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
 
     private def removeExistingBroker(brokerState: ControllerBrokerStateInfo) {
         try {
-            brokerState.networkClient.close()// 关闭底层连接
-            brokerState.messageQueue.clear()// 清空队列
-            brokerState.requestSendThread.shutdown()// 关闭发送线程
+            brokerState.networkClient.close() // 关闭底层连接
+            brokerState.messageQueue.clear() // 清空队列
+            brokerState.requestSendThread.shutdown() // 关闭发送线程
             brokerStateInfo.remove(brokerState.brokerNode.id)
         } catch {
             case e: Throwable => error("Error while removing broker by the controller", e)
@@ -261,6 +261,9 @@ class RequestSendThread(val controllerId: Int,
 
 }
 
+/**
+  * 实现了向 broker 批量发送请求的功能
+  */
 class ControllerBrokerRequestBatch(controller: KafkaController) extends Logging {
     val controllerContext = controller.controllerContext
     val controllerId: Int = controller.config.brokerId
