@@ -29,7 +29,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ChannelBuilders, LoginType, Mode, NetworkReceive, Selectable, Selector}
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.requests
-import org.apache.kafka.common.requests.{UpdateMetadataRequest, _}
+import org.apache.kafka.common.requests.{AbstractRequestResponse, UpdateMetadataRequest, _}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Node, TopicPartition}
 
@@ -43,6 +43,8 @@ import scala.collection.{Set, mutable}
 class ControllerChannelManager(controllerContext: ControllerContext, config: KafkaConfig, time: Time, metrics: Metrics, threadNamePrefix: Option[String] = None) extends Logging {
 
     // 核心字段，管理集群中每个broker对应的ConrollerBrokerStateInfo对象
+    // 这个ControllerBrokerStateInfo里面最核心的就是一个发送线程
+    // 发送线程 RequestSendThread 里面其实就是发送（实际底层还是networkClient）并解析回调
     protected val brokerStateInfo = new mutable.HashMap[Int, ControllerBrokerStateInfo]
     private val brokerLock = new Object
     this.logIdent = "[Channel manager on controller " + config.brokerId + "]: "
@@ -179,6 +181,9 @@ class RequestSendThread(val controllerId: Int,
 
         // 从缓冲队列中拿一个QueueItem
         val QueueItem(apiKey, apiVersion, request, callback): QueueItem = queue.take()
+
+        // 标记一下这个callback的类型
+        val thisCallBackClazz: AbstractRequestResponse => Unit = callback
         import NetworkClientBlockingOps._
         var clientResponse: ClientResponse = null
         try {
@@ -213,7 +218,8 @@ class RequestSendThread(val controllerId: Int,
                     }
                 }
                 if (clientResponse != null) {
-                    val response = ApiKeys.forId(clientResponse.request.request.header.apiKey) match {
+
+                    val response: AbstractRequestResponse = ApiKeys.forId(clientResponse.request.request.header.apiKey) match {
                         case ApiKeys.LEADER_AND_ISR => new LeaderAndIsrResponse(clientResponse.responseBody)
                         case ApiKeys.STOP_REPLICA => new StopReplicaResponse(clientResponse.responseBody)
                         case ApiKeys.UPDATE_METADATA_KEY => new UpdateMetadataResponse(clientResponse.responseBody)
@@ -223,8 +229,8 @@ class RequestSendThread(val controllerId: Int,
                       .format(controllerId, controllerContext.epoch, response.toString, brokerNode.toString))
 
                     // 调用之前封装的回调函数
-                    if (callback != null) {
-                        callback(response)
+                    if (thisCallBackClazz != null) {
+                        thisCallBackClazz(response)
                     }
                 }
             }
@@ -267,14 +273,15 @@ class RequestSendThread(val controllerId: Int,
 class ControllerBrokerRequestBatch(controller: KafkaController) extends Logging {
     val controllerContext = controller.controllerContext
     val controllerId: Int = controller.config.brokerId
-    val leaderAndIsrRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, PartitionStateInfo]]// 记录了发往指定Broker的LeaderAndIsrRequest所有的信息
+    val leaderAndIsrRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, PartitionStateInfo]]
+    // 记录了发往指定Broker的LeaderAndIsrRequest所有的信息
     val stopReplicaRequestMap = mutable.Map.empty[Int, Seq[StopReplicaRequestInfo]]
     val updateMetadataRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, PartitionStateInfo]]
     private val stateChangeLogger = KafkaController.stateChangeLogger
 
     def newBatch() {
         // raise error if the previous batch is not empty
-        if (leaderAndIsrRequestMap.size > 0) 
+        if (leaderAndIsrRequestMap.size > 0)
             throw new IllegalStateException("Controller to broker state change requests batch is not empty while creating " +
               "a new one. Some LeaderAndIsr state changes %s might be lost ".format(leaderAndIsrRequestMap.toString()))
         if (stopReplicaRequestMap.size > 0)
@@ -465,7 +472,9 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends Logging 
 case class ControllerBrokerStateInfo(networkClient: NetworkClient, // 负责维护Controller与Broker通信的网络通信，与NetworkClientBlockingOps 配合实现阻塞
                                      brokerNode: Node, // 记录了broker的host，ip，port以及机架信息。
                                      messageQueue: BlockingQueue[QueueItem], // 缓冲队列，QueueItem：封装了请求本身与对应的回调函数
-                                     requestSendThread: RequestSendThread)// RequestSendThread用于发送请求的线程，继承了 ShutdownAbleThread，在线程停止前会循环执行doWork，通过NetworkClientBlockingOps 完成发送请求并阻塞等待响应
+                                     requestSendThread: RequestSendThread)
+
+// RequestSendThread用于发送请求的线程，继承了 ShutdownAbleThread，在线程停止前会循环执行doWork，通过NetworkClientBlockingOps 完成发送请求并阻塞等待响应
 
 case class StopReplicaRequestInfo(replica: PartitionAndReplica, deletePartition: Boolean, callback: AbstractRequestResponse => Unit = null)
 
