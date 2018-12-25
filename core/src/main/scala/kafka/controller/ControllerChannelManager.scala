@@ -267,14 +267,14 @@ class RequestSendThread(val controllerId: Int,
 class ControllerBrokerRequestBatch(controller: KafkaController) extends Logging {
     val controllerContext = controller.controllerContext
     val controllerId: Int = controller.config.brokerId
-    val leaderAndIsrRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, PartitionStateInfo]]
+    val leaderAndIsrRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, PartitionStateInfo]]// 记录了发往指定Broker的LeaderAndIsrRequest所有的信息
     val stopReplicaRequestMap = mutable.Map.empty[Int, Seq[StopReplicaRequestInfo]]
     val updateMetadataRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, PartitionStateInfo]]
     private val stateChangeLogger = KafkaController.stateChangeLogger
 
     def newBatch() {
         // raise error if the previous batch is not empty
-        if (leaderAndIsrRequestMap.size > 0)
+        if (leaderAndIsrRequestMap.size > 0) 
             throw new IllegalStateException("Controller to broker state change requests batch is not empty while creating " +
               "a new one. Some LeaderAndIsr state changes %s might be lost ".format(leaderAndIsrRequestMap.toString()))
         if (stopReplicaRequestMap.size > 0)
