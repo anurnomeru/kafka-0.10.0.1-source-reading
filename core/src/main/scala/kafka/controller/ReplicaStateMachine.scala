@@ -44,9 +44,6 @@ import kafka.utils.CoreUtils._
   * 7. NonExistentReplica: If a replica is deleted successfully, it is moved to this state. Valid previous state is
   * ReplicaDeletionSuccessful
   *
-  * 管理集群中所有副本状态的状态机
-  *
-  * NewReplica： 在partition重分配期间，
   */
 class ReplicaStateMachine(controller: KafkaController) extends Logging {
     private val controllerContext = controller.controllerContext
@@ -136,7 +133,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
       *
       * OnlineReplica,OfflineReplica -> OnlineReplica
       * --send LeaderAndIsr request with current leader and isr to the new replica and UpdateMetadata request for the
-      * partition to every live broker
+      * * partition to every live broker
       *
       * NewReplica,OnlineReplica,OfflineReplica,ReplicaDeletionIneligible -> OfflineReplica
       * --send StopReplicaRequest to the replica (w/o deletion)
