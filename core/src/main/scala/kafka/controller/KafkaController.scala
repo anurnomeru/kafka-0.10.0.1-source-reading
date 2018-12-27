@@ -56,15 +56,15 @@ class ControllerContext(val zkUtils: ZkUtils,
     val controllerLock: ReentrantLock = new ReentrantLock()
     var shuttingDownBrokerIds: mutable.Set[Int] = mutable.Set.empty; // 正在关闭的BrokerId集合
     val brokerShutdownLock: Object = new Object
-    var epoch: Int = KafkaController.InitialControllerEpoch - 1;
+    var epoch: Int = KafkaController.InitialControllerEpoch - 1
     var epochZkVersion: Int = KafkaController.InitialControllerEpochZkVersion - 1
     var allTopics: Set[String] = Set.empty; // 集群中所有topic
-    var partitionReplicaAssignment: mutable.Map[TopicAndPartition, Seq[Int]] = mutable.Map.empty // 记录了每个分区的AR集合
+    var partitionReplicaAssignment: mutable.Map[TopicAndPartition, Seq[Int]] = mutable.Map.empty // 记录了每个分区的AR集合，即所有集合
     var partitionLeadershipInfo: mutable.Map[TopicAndPartition, LeaderIsrAndControllerEpoch] = mutable.Map.empty; // 记录了每个分区的leader副本所在的brokerId，ISR集合以及年代等信息
     val partitionsBeingReassigned: mutable.Map[TopicAndPartition, ReassignedPartitionsContext] = new mutable.HashMap; // 正在重新分配副本的分区
     val partitionsUndergoingPreferredReplicaElection: mutable.Set[TopicAndPartition] = new mutable.HashSet; // 正在进行“优先副本”选举的分区
 
-    private var liveBrokersUnderlying: Set[Broker] = Set.empty;
+    private var liveBrokersUnderlying: Set[Broker] = Set.empty
     private var liveBrokerIdsUnderlying: Set[Int] = Set.empty
 
     // setter

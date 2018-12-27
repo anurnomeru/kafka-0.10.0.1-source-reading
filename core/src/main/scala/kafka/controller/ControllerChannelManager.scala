@@ -271,14 +271,18 @@ class RequestSendThread(val controllerId: Int,
   * 实现了向 broker 批量发送请求的功能
   */
 class ControllerBrokerRequestBatch(controller: KafkaController) extends Logging {
+    //  维护了Controller的上下文信息，可以看做是zookeeper的缓存，
+    //  缓存了可用的broker，所有的topic，分区，副本信息等。
     val controllerContext = controller.controllerContext
+    // 当前的brokerId，配置文件中的 broker.id
     val controllerId: Int = controller.config.brokerId
+
     val leaderAndIsrRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, PartitionStateInfo]]
-    // 记录了发往指定Broker的LeaderAndIsrRequest所有的信息
     val stopReplicaRequestMap = mutable.Map.empty[Int, Seq[StopReplicaRequestInfo]]
     val updateMetadataRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, PartitionStateInfo]]
     private val stateChangeLogger = KafkaController.stateChangeLogger
 
+    // 确保三个map都为空
     def newBatch() {
         // raise error if the previous batch is not empty
         if (leaderAndIsrRequestMap.size > 0)
@@ -380,6 +384,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends Logging 
                         state.leaderIsrAndControllerEpoch, broker,
                         topicPartition.topic, topicPartition.partition))
                 }
+                // partitionStateInfos : mutable.Map[TopicPartition, PartitionStateInfo]
                 val leaderIds = partitionStateInfos.map(_._2.leaderIsrAndControllerEpoch.leaderAndIsr.leader).toSet
                 val leaders = controllerContext.liveOrShuttingDownBrokers.filter(b => leaderIds.contains(b.id)).map {
                     _.getNode(controller.config.interBrokerSecurityProtocol)

@@ -45,6 +45,8 @@ import kafka.utils.CoreUtils._
   * ReplicaDeletionSuccessful
   *
   * 管理集群中所有副本状态的状态机
+  *
+  * NewReplica： 在partition重分配期间，
   */
 class ReplicaStateMachine(controller: KafkaController) extends Logging {
     private val controllerContext = controller.controllerContext

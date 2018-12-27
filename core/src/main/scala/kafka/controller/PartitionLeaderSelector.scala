@@ -20,17 +20,21 @@ import kafka.admin.AdminUtils
 import kafka.api.LeaderAndIsr
 import kafka.log.LogConfig
 import kafka.utils.Logging
-import kafka.common.{LeaderElectionNotNeededException, TopicAndPartition, StateChangeFailedException, NoReplicaOnlineException}
+import kafka.common.{LeaderElectionNotNeededException, NoReplicaOnlineException, StateChangeFailedException, TopicAndPartition}
 import kafka.server.{ConfigType, KafkaConfig}
 
+import scala.collection.Seq
+
 /**
-  * 实现了多种leader副本选举策略
+  * 实现了多种leader副本选举策略 TODO 后面要看看，这个和想象中的选主不太一样
   */
 trait PartitionLeaderSelector {
 
     /**
-      * @param topicAndPartition   The topic and partition whose leader needs to be elected
-      * @param currentLeaderAndIsr The current leader and isr of input partition read from zookeeper
+      * 返回新的Leader副本和新ISR集合信息，以及需要接受LeaderAndIsrRequest的BrokerId
+      *
+      * @param topicAndPartition   The topic and partition whose leader needs to be elected 需要进行副本选举的分区
+      * @param currentLeaderAndIsr The current leader and isr of input partition read from zookeeper 当前Leader副本信息、ISR信息
       * @throws NoReplicaOnlineException If no replica in the assigned replicas list is alive
       * @return The leader and isr request, with the newly selected leader and isr, and the set of replicas to receive
       *         the LeaderAndIsrRequest.
@@ -40,6 +44,7 @@ trait PartitionLeaderSelector {
 }
 
 /**
+  *
   * Select the new leader, new isr and receiving replicas (for the LeaderAndIsrRequest):
   * 1. If at least one broker from the isr is alive, it picks a broker from the live isr as the new leader and the live
   * isr as the new isr.
@@ -54,16 +59,31 @@ class OfflinePartitionLeaderSelector(controllerContext: ControllerContext, confi
     this.logIdent = "[OfflinePartitionLeaderSelector]: "
 
     def selectLeader(topicAndPartition: TopicAndPartition, currentLeaderAndIsr: LeaderAndIsr): (LeaderAndIsr, Seq[Int]) = {
+
+        // 从所有集合(AR)中获取传入的这个tp
         controllerContext.partitionReplicaAssignment.get(topicAndPartition) match {
+
             case Some(assignedReplicas) =>
-                val liveAssignedReplicas = assignedReplicas.filter(r => controllerContext.liveBrokerIds.contains(r))
+                val assignedReplicasType: Seq[Int] = assignedReplicas
+
+                // 从AR中过滤掉不可用的副本，即不在shuttingDownBrokerIds中的副本
+                val liveAssignedReplicas: Seq[Int] = assignedReplicas.filter(r => controllerContext.liveBrokerIds.contains(r))
+
+                // 现存ISR集合中过滤掉不可用的副本
                 val liveBrokersInIsr = currentLeaderAndIsr.isr.filter(r => controllerContext.liveBrokerIds.contains(r))
+
+                // 当前的leaderEpoch即，年代
                 val currentLeaderEpoch = currentLeaderAndIsr.leaderEpoch
                 val currentLeaderIsrZkPathVersion = currentLeaderAndIsr.zkVersion
+
+                // 如果 isr中为空，
                 val newLeaderAndIsr = liveBrokersInIsr.isEmpty match {
+
+                    // 如果刚才的ISR全卒了
                     case true =>
                         // Prior to electing an unclean (i.e. non-ISR) leader, ensure that doing so is not disallowed by the configuration
                         // for unclean leader election.
+
                         if (!LogConfig.fromProps(config.originals, AdminUtils.fetchEntityConfig(controllerContext.zkUtils,
                             ConfigType.Topic, topicAndPartition.topic)).uncleanLeaderElectionEnable) {
                             throw new NoReplicaOnlineException(("No broker in ISR for partition " +
@@ -80,14 +100,16 @@ class OfflinePartitionLeaderSelector(controllerContext: ControllerContext, confi
                                   " Assigned replicas are: [%s]".format(assignedReplicas))
                             case false =>
                                 ControllerStats.uncleanLeaderElectionRate.mark()
-                                val newLeader = liveAssignedReplicas.head
+                                val newLeader: Int = liveAssignedReplicas.head
                                 warn("No broker in ISR is alive for %s. Elect leader %d from live brokers %s. There's potential data loss."
                                   .format(topicAndPartition, newLeader, liveAssignedReplicas.mkString(",")))
                                 new LeaderAndIsr(newLeader, currentLeaderEpoch + 1, List(newLeader), currentLeaderIsrZkPathVersion + 1)
                         }
+
+                    // 如果刚才的ISR没卒全
                     case false =>
                         val liveReplicasInIsr = liveAssignedReplicas.filter(r => liveBrokersInIsr.contains(r))
-                        val newLeader = liveReplicasInIsr.head
+                        val newLeader: Int = liveReplicasInIsr.head
                         debug("Some broker in ISR is alive for %s. Select %d from ISR %s to be the leader."
                           .format(topicAndPartition, newLeader, liveBrokersInIsr.mkString(",")))
                         new LeaderAndIsr(newLeader, currentLeaderEpoch + 1, liveBrokersInIsr.toList, currentLeaderIsrZkPathVersion + 1)
@@ -202,6 +224,8 @@ class ControlledShutdownLeaderSelector(controllerContext: ControllerContext)
 /**
   * Essentially does nothing. Returns the current leader and ISR, and the current
   * set of replicas assigned to a given topic/partition.
+  *
+  * 不需要做任何操作
   */
 class NoOpLeaderSelector(controllerContext: ControllerContext) extends PartitionLeaderSelector with Logging {
 
