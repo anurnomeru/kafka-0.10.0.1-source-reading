@@ -152,26 +152,28 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
       * ReplicaDeletionSuccessful -> NonExistentReplica
       * -- remove the replica from the in memory partition replica assignment cache
       *
-      * @param partitionAndReplica The replica for which the state transition is invoked
-      * @param targetState         The end state that the replica should be moved to
+      * @param partitionAndReplica The replica for which the state transition is invoked 发生状态变化的那个副本
+      * @param targetState         The end state that the replica should be moved to 准备变化成的状态
       */
     def handleStateChange(partitionAndReplica: PartitionAndReplica, targetState: ReplicaState,
                           callbacks: Callbacks) {
-        val topic = partitionAndReplica.topic
-        val partition = partitionAndReplica.partition
+        val topic: String = partitionAndReplica.topic
+        val partition: Int = partitionAndReplica.partition
         val replicaId = partitionAndReplica.replica
-        val topicAndPartition = TopicAndPartition(topic, partition)
+        val topicAndPartition: TopicAndPartition = TopicAndPartition(topic, partition)
         if (!hasStarted.get)
             throw new StateChangeFailedException(("Controller %d epoch %d initiated state change of replica %d for partition %s " +
               "to %s failed because replica state machine has not started")
               .format(controllerId, controller.epoch, replicaId, topicAndPartition, targetState))
-        val currState = replicaState.getOrElseUpdate(partitionAndReplica, NonExistentReplica)
+        val currState: ReplicaState = replicaState.getOrElseUpdate(partitionAndReplica, NonExistentReplica)
         try {
-            val replicaAssignment = controllerContext.partitionReplicaAssignment(topicAndPartition)
+            val replicaAssignment: Seq[Int] = controllerContext.partitionReplicaAssignment(topicAndPartition) // 记录了该分区的AR集合，即所有集合
             targetState match {
                 case NewReplica =>
+                    // 断言能否切换到这个状态
                     assertValidPreviousStates(partitionAndReplica, List(NonExistentReplica), targetState)
                     // start replica as a follower to the current leader for its partition
+                    // 为 TP 获取leader信息
                     val leaderIsrAndControllerEpochOpt = ReplicationUtils.getLeaderIsrAndEpochForPartition(zkUtils, topic, partition)
                     leaderIsrAndControllerEpochOpt match {
                         case Some(leaderIsrAndControllerEpoch) =>
