@@ -72,7 +72,7 @@ class Replica(val brokerId: Int,
 
   private def logEndOffset_=(newLogEndOffset: LogOffsetMetadata) {
     if (isLocal) {
-      // 不能直接更新本地副本的LEO TODO 由 log.get.logEndOffsetMetadata 获取
+      // 不能直接更新本地副本的LEO TODO LEO 由 log.logEndOffsetMetadata 字段决定
       throw new KafkaException("Should not set log end offset on partition [%s,%d]'s local replica %d".format(topic, partitionId, brokerId))
     } else {
 
