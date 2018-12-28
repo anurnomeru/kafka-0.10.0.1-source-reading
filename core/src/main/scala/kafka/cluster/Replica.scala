@@ -28,9 +28,11 @@ class Replica(val brokerId: Int,
               val partition: Partition,// 这个副本的分区
               time: Time = SystemTime,
               initialHighWatermarkValue: Long = 0L,
-              val log: Option[Log] = None) extends Logging {
+              val log: Option[Log] = None // 对于远程副本来说，这个值为空，永此字段可以区分本地副本和远程副本
+             ) extends Logging {
   // the high watermark offset value, in non-leader replicas only its message offsets are kept
   // HW
+  // 记录hw的值，消费者只能获取到HW之前的消息，和HW相对的有一个叫做LEO（log end offset的），HW指的是已经备份的了，也就是半数副本已经同步到本地的值
   @volatile private[this] var highWatermarkMetadata: LogOffsetMetadata = new LogOffsetMetadata(initialHighWatermarkValue)
   // the log end offset value, kept in all replicas;
   // for local replica it is the log's end offset, for remote replicas its value is only updated by follower fetch
@@ -40,6 +42,7 @@ class Replica(val brokerId: Int,
   val topic: String = partition.topic
   val partitionId: Int = partition.partitionId
 
+  // 是否是本地副本
   def isLocal: Boolean = {
     log match {
       case Some(l) => true

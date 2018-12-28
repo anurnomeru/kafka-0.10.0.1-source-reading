@@ -108,7 +108,7 @@ class ReplicaManager(val config: KafkaConfig,
                      threadNamePrefix: Option[String] = None) extends Logging with KafkaMetricsGroup {
   /* epoch of the controller that last changed the leader */
   @volatile var controllerEpoch: Int = KafkaController.InitialControllerEpoch - 1
-  private val localBrokerId = config.brokerId
+  private val localBrokerId = config.brokerId // 当前机器的brokerId
   private val allPartitions = new Pool[(String, Int), Partition](valueFactory = Some { case (t, p) =>
     new Partition(t, p, time, this)
   })
