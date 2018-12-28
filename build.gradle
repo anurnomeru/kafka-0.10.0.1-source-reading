@@ -810,7 +810,7 @@ project(':connect:json') {
     compile libs.jacksonDatabind
     compile libs.slf4jApi
 
-    testCompile libs.easymock
+    testCompile libs.easymockg
     testCompile libs.junit
     testCompile libs.powermock
     testCompile libs.powermockEasymock
