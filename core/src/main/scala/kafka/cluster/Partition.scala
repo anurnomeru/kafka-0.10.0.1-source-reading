@@ -265,6 +265,8 @@ class Partition(val topic: String,
     /**
       * Make the local replica the follower by setting the new leader and ISR to empty
       * If the leader replica id does not change, return false to indicate the replica manager
+      *
+      * 通过设置新的leader和将ISR清空来让本地副本成为follower，如果leader replica id没有变，返回false来告知replica manager
       */
     def makeFollower(controllerId: Int, partitionStateInfo: PartitionState, correlationId: Int): Boolean = {
         inWriteLock(leaderIsrUpdateLock) {
