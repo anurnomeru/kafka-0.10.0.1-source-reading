@@ -107,6 +107,11 @@ class Partition(val topic: String,
         replicaOpt match {
             case Some(replica) => replica // 如果有直接返回
             case None =>
+
+                /**
+                  * 如果说创建的是本地副本，还会对Log进行初始化/恢复 HW，HW也会记录到文件中保存
+                  *
+                  */
                 if (isReplicaLocal(replicaId)) {
                     // 默认使用 logManager配置，但zk如果配置了某项，则优先使用zk的配置。
                     val config: LogConfig = LogConfig.fromProps(logManager.defaultConfig.originals,
@@ -131,7 +136,7 @@ class Partition(val topic: String,
                     // 创建replica对象
                     val localReplica = new Replica(replicaId, this, time, offset, Some(log))
 
-                    // 添加起来
+                    // 将replica添加到AR中去
                     addReplicaIfNotExists(localReplica)
                 } else {
                     val remoteReplica = new Replica(replicaId, this, time)
