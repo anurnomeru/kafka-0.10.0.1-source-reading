@@ -35,7 +35,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.PartitionState
 
 import scala.collection.JavaConverters._
-import scala.collection.Map
+import scala.collection.{Map, mutable}
 
 /**
   * Data structure that represents a topic partition. The leader maintains the AR, ISR, CUR, RAR
@@ -53,6 +53,7 @@ class Partition(val topic: String,
 
     // 操作zk的辅助类
     private val zkUtils = replicaManager.zkUtils
+
     // The read lock is only required when multiple reads are executed and needs to be in a consistent manner
     private val leaderIsrUpdateLock = new ReentrantReadWriteLock()
 
@@ -199,18 +200,37 @@ class Partition(val topic: String,
       * Make the local replica the leader by resetting LogEndOffset for remote replicas (there could be old LogEndOffset
       * from the time when this broker was the leader last time) and setting the new leader and ISR.
       * If the leader replica id does not change, return false to indicate the replica manager.
+      *
+      * 通过重置远程副本的LEO并对新的leader与ISR进行设置来让本地副本成为leader（可以是老的LEO因为这个broker刚才就是leader），
+      * 如果 leader 副本 id 没变，返回 false 来告知 replica manager
+      *
+      *
+      * makeleader方法其实就是根据PartitionState里面的信息来将副本转换为leader
       */
     def makeLeader(controllerId: Int, partitionStateInfo: PartitionState, correlationId: Int): Boolean = {
         val (leaderHWIncremented, isNewLeader) = inWriteLock(leaderIsrUpdateLock) {
-            val allReplicas = partitionStateInfo.replicas.asScala.map(_.toInt)
+
+            // 从 partitionStateInfo 中获取所有副本，TODO 为什么不是从ar中获取？   因为ar实际上就是从这里赋值的
+            val allReplicas: mutable.Set[Int] = partitionStateInfo.replicas.asScala.map(_.toInt)
+
             // record the epoch of the controller that made the leadership decision. This is useful while updating the isr
             // to maintain the decision maker controller's epoch in the zookeeper path
+            // 记录年代信息来做出领导决策？？？ 当更新isr来维持zk上的决策者控制器年代信息时需要用到
             controllerEpoch = partitionStateInfo.controllerEpoch
+
+            // 创建allReplicas里面的这些replica
             // add replicas that are new
             allReplicas.foreach(replica => getOrCreateReplica(replica))
-            val newInSyncReplicas = partitionStateInfo.isr.asScala.map(r => getOrCreateReplica(r)).toSet
+
+            // isr集合
+            val newInSyncReplicas: Set[Replica] = partitionStateInfo.isr.asScala.map(r => getOrCreateReplica(r)).toSet
+
+
             // remove assigned replicas that have been removed by the controller
-            (assignedReplicas().map(_.brokerId) -- allReplicas).foreach(removeReplica(_))
+            // 移除那些已经被控制器移除的副本
+            (assignedReplicas() // 看起来像是 本地AR中有，但是网络传来的没有的，将其移除
+              .map(_.brokerId) -- allReplicas).foreach(removeReplica(_))
+
             inSyncReplicas = newInSyncReplicas
             leaderEpoch = partitionStateInfo.leaderEpoch
             zkVersion = partitionStateInfo.zkVersion
