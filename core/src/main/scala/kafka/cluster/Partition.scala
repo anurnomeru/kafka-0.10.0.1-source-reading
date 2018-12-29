@@ -27,6 +27,7 @@ import kafka.controller.KafkaController
 import kafka.log.{Log, LogConfig}
 import kafka.message.ByteBufferMessageSet
 import kafka.metrics.KafkaMetricsGroup
+import kafka.server.LogOffsetMetadata.OffsetOrdering
 import kafka.server._
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
@@ -215,7 +216,7 @@ class Partition(val topic: String,
 
             // record the epoch of the controller that made the leadership decision. This is useful while updating the isr
             // to maintain the decision maker controller's epoch in the zookeeper path
-            // 记录年代信息来做出领导决策？？？ 当更新isr来维持zk上的决策者控制器年代信息时需要用到
+            // 记录controller年代信息来做出领导决策？？？ 当更新isr来维持zk上的决策者控制器年代信息时需要用到
             controllerEpoch = partitionStateInfo.controllerEpoch
 
             // 创建allReplicas里面的这些replica
@@ -245,10 +246,14 @@ class Partition(val topic: String,
             // we may need to increment high watermark since ISR could be down to 1
             if (isNewLeader) {
                 // construct the high watermark metadata for the new leader replica
+                // 初始化HW
                 leaderReplica.convertHWToLocalOffsetMetadata()
+
                 // reset log end offset for remote replicas
                 assignedReplicas.filter(_.brokerId != localBrokerId).foreach(_.updateLogReadResult(LogReadResult.UnknownLogReadResult))
             }
+            // 阐释后移leader副本的HW，TODO 当ISR集合发生增减或者ISR集合中任意副本的LEO发生变化时，都可能导致ISR集合最小的LEO变大，
+            // 所以这些情况都要调用maybeIncrementLeaderHw方法进行检测
             (maybeIncrementLeaderHW(leaderReplica), isNewLeader)
         }
         // some delayed operations may be unblocked after HW changed
@@ -408,8 +413,10 @@ class Partition(val topic: String,
       * since all callers of this private API acquire that lock
       */
     private def maybeIncrementLeaderHW(leaderReplica: Replica): Boolean = {
-        val allLogEndOffsets = inSyncReplicas.map(_.logEndOffset)
-        val newHighWatermark = allLogEndOffsets.min(new LogOffsetMetadata.OffsetOrdering)
+        val allLogEndOffsets: Set[LogOffsetMetadata] = inSyncReplicas.map(_.logEndOffset)
+
+        // 获取最小的offsetOrdering
+        val newHighWatermark: LogOffsetMetadata = allLogEndOffsets.min(new LogOffsetMetadata.OffsetOrdering)
         val oldHighWatermark = leaderReplica.highWatermark
         if (oldHighWatermark.messageOffset < newHighWatermark.messageOffset || oldHighWatermark.onOlderSegment(newHighWatermark)) {
             leaderReplica.highWatermark = newHighWatermark

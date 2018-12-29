@@ -24,6 +24,7 @@ object LogOffsetMetadata {
   val UnknownSegBaseOffset = -1L
   val UnknownFilePosition = -1
 
+  // 相当于comparable
   class OffsetOrdering extends Ordering[LogOffsetMetadata] {
     override def compare(x: LogOffsetMetadata, y: LogOffsetMetadata): Int = {
       x.offsetDiff(y).toInt
