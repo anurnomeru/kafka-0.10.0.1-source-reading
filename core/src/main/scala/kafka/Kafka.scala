@@ -28,50 +28,50 @@ import scala.collection.JavaConversions._
 
 object Kafka extends Logging {
 
-  def getPropsFromArgs(args: Array[String]): Properties = {
-    val optionParser = new OptionParser
-    val overrideOpt = optionParser.accepts("override", "Optional property that should override values set in server.properties file")
-      .withRequiredArg()
-      .ofType(classOf[String])
+    def getPropsFromArgs(args: Array[String]): Properties = {
+        val optionParser = new OptionParser
+        val overrideOpt = optionParser.accepts("override", "Optional property that should override values set in server.properties file")
+          .withRequiredArg()
+          .ofType(classOf[String])
 
-    if (args.length == 0) {
-      CommandLineUtils.printUsageAndDie(optionParser, "USAGE: java [options] %s server.properties [--override property=value]*".format(classOf[KafkaServer].getSimpleName()))
-    }
-
-    val props = Utils.loadProps(args(0))
-
-    if (args.length > 1) {
-      val options = optionParser.parse(args.slice(1, args.length): _*)
-
-      if (options.nonOptionArguments().size() > 0) {
-        CommandLineUtils.printUsageAndDie(optionParser, "Found non argument parameters: " + options.nonOptionArguments().toArray.mkString(","))
-      }
-
-      props.putAll(CommandLineUtils.parseKeyValueArgs(options.valuesOf(overrideOpt)))
-    }
-    props
-  }
-
-  def main(args: Array[String]): Unit = {
-    try {
-      val serverProps: Properties = getPropsFromArgs(args)
-      val kafkaServerStartable = KafkaServerStartable.fromProps(serverProps)
-
-      // attach shutdown handler to catch control-c
-      Runtime.getRuntime.addShutdownHook(new Thread() {
-        override def run() = {
-          kafkaServerStartable.shutdown()
+        if (args.length == 0) {
+            CommandLineUtils.printUsageAndDie(optionParser, "USAGE: java [options] %s server.properties [--override property=value]*".format(classOf[KafkaServer].getSimpleName()))
         }
-      })
 
-      kafkaServerStartable.startup()
-      kafkaServerStartable.awaitShutdown()
+        val props = Utils.loadProps(args(0))
+
+        if (args.length > 1) {
+            val options = optionParser.parse(args.slice(1, args.length): _*)
+
+            if (options.nonOptionArguments().size() > 0) {
+                CommandLineUtils.printUsageAndDie(optionParser, "Found non argument parameters: " + options.nonOptionArguments().toArray.mkString(","))
+            }
+
+            props.putAll(CommandLineUtils.parseKeyValueArgs(options.valuesOf(overrideOpt)))
+        }
+        props
     }
-    catch {
-      case e: Throwable =>
-        fatal(e)
-        System.exit(1)
+
+    def main(args: Array[String]): Unit = {
+        try {
+            val serverProps: Properties = getPropsFromArgs(args)
+            val kafkaServerStartable = KafkaServerStartable.fromProps(serverProps)
+
+            // attach shutdown handler to catch control-c
+            Runtime.getRuntime.addShutdownHook(new Thread() {
+                override def run() = {
+                    kafkaServerStartable.shutdown()
+                }
+            })
+
+            kafkaServerStartable.startup()
+            kafkaServerStartable.awaitShutdown()
+        }
+        catch {
+            case e: Throwable =>
+                fatal(e)
+                System.exit(1)
+        }
+        System.exit(0)
     }
-    System.exit(0)
-  }
 }

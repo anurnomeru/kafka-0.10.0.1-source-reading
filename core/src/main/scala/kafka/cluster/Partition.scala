@@ -323,18 +323,27 @@ class Partition(val topic: String,
       * Check and maybe expand the ISR of the partition.
       *
       * This function can be triggered when a replica's LEO has incremented
+      *
+      * 进行检查，并可能拓展分区的 ISR
+      * 当副本的LEO增长时会调用这个方法
       */
     def maybeExpandIsr(replicaId: Int) {
         val leaderHWIncremented = inWriteLock(leaderIsrUpdateLock) {
             // check if this replica needs to be added to the ISR
             leaderReplicaIfLocal() match {
                 case Some(leaderReplica) =>
-                    val replica = getReplica(replicaId).get
-                    val leaderHW = leaderReplica.highWatermark
+                    val replica: Replica = getReplica(replicaId).get
+                    val leaderHW: LogOffsetMetadata = leaderReplica.highWatermark
+
+                    // 不在ISR中
+                    // 在AR中
+                    // leo已经追赶上HW
                     if (!inSyncReplicas.contains(replica) &&
                       assignedReplicas.map(_.brokerId).contains(replicaId) &&
                       replica.logEndOffset.offsetDiff(leaderHW) >= 0) {
-                        val newInSyncReplicas = inSyncReplicas + replica
+
+                        // 新的ISR
+                        val newInSyncReplicas: Set[Replica] = inSyncReplicas + replica
                         info("Expanding ISR for partition [%s,%d] from %s to %s"
                           .format(topic, partitionId, inSyncReplicas.map(_.brokerId).mkString(","),
                               newInSyncReplicas.map(_.brokerId).mkString(",")))
