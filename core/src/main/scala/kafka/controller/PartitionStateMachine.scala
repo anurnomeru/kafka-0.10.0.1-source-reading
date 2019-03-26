@@ -49,6 +49,7 @@ import kafka.utils.CoreUtils._
   * NewPartition -> OnlinePartition 首先将Leader副本和ISR集合的信息写入到Zk中，这里会将分区的AR集合中第一个可用的分区选举为Leader，
   * 并将分区中的所有可用副本做一位ISr集合。之后，向所有副本发送LeaderAndIsrRequest，指导这些副本进行Leader/follower的角色切换，
   * 并且向所有可用的Broker发送UpdateMetadataRequest来更新其上的MetadataCache
+  *
   **/
 class PartitionStateMachine(controller: KafkaController) extends Logging {
     private val controllerContext = controller.controllerContext
